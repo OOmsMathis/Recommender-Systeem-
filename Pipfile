@@ -14,6 +14,7 @@ scikit-surprise = "*"
 python-dotenv = "*"
 scikit-learn = "*"
 streamlit = "*"
+black = "*"
 
 [dev-packages]
 
