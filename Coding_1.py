@@ -4,6 +4,9 @@ from loaders import load_ratings, load_items
 from IPython.display import display
 import matplotlib.pyplot as plt
 from scipy.sparse import csr_matrix
+from matplotlib.backends.backend_pdf import PdfPages
+from io import BytesIO
+import base64
 
 
 #3 Loading data
@@ -32,6 +35,7 @@ print(f"(g) Number of movies that were not rated at all : {n_films_not_rated}")
 
 
 #6. Long-tail property 
+import matplotlib.pyplot as plt
 plt.figure(figsize=(12, 6))
 rating_counts = df_ratings["movieId"].value_counts()
 rating_counts_sorted = rating_counts.sort_values(ascending=False)
@@ -41,6 +45,7 @@ plt.ylabel('Number of ratings')
 plt.title('Distribution of ratings per movie (Long-tail property)')
 plt.grid(True)
 plt.show()
+
 
 
 #7. Ratings matrix sparsity
@@ -75,8 +80,9 @@ def create_X(df):
     X = csr_matrix((df["rating"], (user_index,item_index)), shape=(M,N))
 
     return X, user_mapper, movie_mapper, user_inv_mapper, movie_inv_mapper
+
 X, user_mapper, movie_mapper, user_inv_mapper, movie_inv_mapper = create_X(df_ratings)
-# Afficher la matrice X
+
 plt.figure(figsize=(8, 8))
 plt.spy(X[0:100, 0:100], markersize=1)
 plt.title("Sparse Matrix (100 users x 100 movies)")
