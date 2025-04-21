@@ -1,5 +1,5 @@
 # Coding 1 - The Analytics Module
-For this first deliverable, we have implemented the main code `coding1.py`, which allows us to perform the various tasks requested.
+For this first deliverable, we have implemented the main code `coding_1.py`, which allows us to perform the various tasks requested.
 
 ## Path
 Before using the code, we have defined our data path in the `constants.py` file, which contains a `Constant class` with the DATA_PATH. You should adapt this path based on where you store the necessary data files to run the code.
