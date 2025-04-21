@@ -11,7 +11,7 @@ To load the dataset, we used two functions defined in the `loaders.py`: file:
 
 
 ## Descriptive Statistics
-User ratings (df_ratings) and item metadata (df_items) are loaded using the load_ratings() and load_items() functions as described in the previous paragraph
+User ratings (df_ratings) and items data (df_items) are loaded using the load_ratings() and load_items() functions as described in the previous paragraph
 We apply counting methods such as .count() and .nunique() to extract key descriptive statistics about users, movies, and ratings.
 These insights help us understand the dataset's structure and coverage before building recommendation models.
 
