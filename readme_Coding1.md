@@ -17,9 +17,11 @@ These insights help us understand the dataset's structure and coverage before bu
 
 ## Long-tail property
 In this section, we analyze the distribution of ratings per movie to explore the long-tail property. This property highlights the fact that a few movies receive a large number of ratings, while the majority of movies receive very few. This is typical in recommendation systems, where some items are highly popular, but most are less frequently rated.
+
 The following code generates a plot to visualize this distribution:
 X-axis: Movie IDs sorted by the number of ratings.
 Y-axis: The number of ratings each movie has received.
+
 For this part we used .value_counts()method of DataFrames.
 The result is visualized using a plot generated with the module matplotlib as plt.
 
