@@ -35,10 +35,10 @@ We used the create_X() function to convert df_ratings into a sparse matrix. This
 To visualize the structure of the sparse matrix, we plotted the non-zero values of a sparse using .spy() method of the matplotlib module. We displayed a 100x100 section (first 100 users vs. first 100 movies), which helps illustrate the sparsity visually.
 
 ### groupe 4
-Delhoute Charles
-Dubart Quentin
-Ducarme Maxime
-Ooms Mathis
+- Delhoute Charles
+- Dubart Quentin
+- Ducarme Maxime
+- Ooms Mathis
 
 
 
