@@ -1,8 +1,8 @@
 # Coding 1 - The Analytics Module
-pour ce premeier rendu, nous avons realiser dans notre code principale `coding1.py` differentes tâches demander.
+For this first deliverable, we have implemented the main code `coding1.py`, which allows us to perform the various tasks requested.
 
 ## Path
-avant d'utiliser le code nous avons mis notre chemin vers les donnés dans le fichier `constants.py` qui reprend une class contant avec le datapath a adapter selon l'emplacement ou vous stockez les donnés utiles pour faire tourner ce code.
+Before using the code, we have defined our data path in the `constants.py` file, which contains a `Constant class` with the DATA_PATH. You should adapt this path based on where you store the necessary data files to run the code.
 
 ## Load data
 To load the dataset, we used two functions defined in the `loaders.py`: file:
