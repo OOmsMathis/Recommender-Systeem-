@@ -21,8 +21,30 @@ The following code generates a plot to visualize this distribution:
 X-axis: Movie IDs sorted by the number of ratings.
 Y-axis: The number of ratings each movie has received.
 For this part we used .value_counts()method of DataFrames.
-The result is visualized using a plot generated with matplotlib.pyplot as plt
+The result is visualized using a plot generated with the module matplotlib as plt.
 
-## Long-tail property
+## Ratings matrix sparsity
+For this part we have used the following documentation: # Source: https://www.jillcates.com/pydata-workshop/html/tutorial.html
+
+To analyze the sparsity of our ratings matrix, we first computed the sparsity value using the formula introduced in the lecture: sparsity = 1.0 - (n_ratings / (n_users * n_films))
+
+We used the create_X() function to convert df_ratings into a sparse matrix. This function maps user and movie IDs to unique indices and stores the ratings in a memory-efficient compressed format using csr_matrix from scipy.
+
+To visualize the structure of the sparse matrix, we plotted the non-zero values using .spy() method of the matplotlib module. We displayed a 100x100 section (first 100 users vs. first 100 movies), which helps illustrate the sparsity visually.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
