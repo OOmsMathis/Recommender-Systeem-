@@ -23,7 +23,7 @@ X-axis: Movie IDs sorted by the number of ratings.
 Y-axis: The number of ratings each movie has received.
 
 For this part we used .value_counts()method of DataFrames.
-The result is visualized using a plot generated with the module matplotlib as plt.
+The result is visualized using a plot generated with the module matplotlib.
 
 ## Ratings matrix sparsity
 For this part we have used the following documentation: # Source: https://www.jillcates.com/pydata-workshop/html/tutorial.html
