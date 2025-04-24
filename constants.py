@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path(r'C:\Users\mathi\OneDrive\Documents\GitHub\Recommender-Systeem-\Data_recommender\data\small')  # -- fill here the dataset size to use
+    DATA_PATH = Path(r'/Users/quentindubart/Documents/GitHub/Recommender-Systeem-/data/small')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
@@ -24,4 +24,5 @@ class Constant:
     USER_ITEM_RATINGS = [USER_ID_COL, ITEM_ID_COL, RATING_COL]
 
     # Rating scale
-    RATINGS_SCALE = None  # -- fill in here the ratings scale as a tuple (min_value, max_value)
+    RATINGS_SCALE = (0.5, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
+
