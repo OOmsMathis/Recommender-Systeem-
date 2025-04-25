@@ -4,7 +4,7 @@ import pandas as pd
 # local imports
 from constants import Constant as C
 from surprise import Dataset, Reader
-
+from datetime import datetime
 
 def load_ratings(surprise_format=False):
     df_ratings = pd.read_csv(C.EVIDENCE_PATH / C.RATINGS_FILENAME)
@@ -28,4 +28,8 @@ def export_evaluation_report(df):
 
     The name of the report is versioned using today's date
     """
-    pass
+    today_str = datetime.today().strftime("%Y_%m_%d")
+    filename = f"evaluation_report_{today_str}.csv"
+    path = C.EVALUATION_PATH / filename
+    df.to_csv(path, index=True)
+    print(f"Evaluation report exported to {path}")

@@ -26,3 +26,6 @@ class Constant:
     # Rating scale
     RATINGS_SCALE = (0.5, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
 
+    #Evaluation
+    EVALUATION_PATH = Path(r'/Users/quentindubart/Documents/GitHub/Recommender-Systeem-/data/small/evaluations')
+
