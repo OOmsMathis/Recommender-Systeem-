@@ -25,3 +25,6 @@ class Constant:
 
     # Rating scale
     RATINGS_SCALE = None  # -- fill in here the ratings scale as a tuple (min_value, max_value)
+    EVALUATION_PATH = Path('/Users/delhoutecharles/Desktop/master 1/q4/recomender system/code/mlsmm2156-main/data/test/evaluations')
+
+   

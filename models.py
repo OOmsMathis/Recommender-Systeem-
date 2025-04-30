@@ -79,5 +79,5 @@ class ModelBaseline3(AlgoBase):
 
 # Fourth Model
 class ModelBaseline4(SVD):
-    def __init__(self):
+    def __init__(self,random_state = 1):
         SVD.__init__(self, n_factors=100)
