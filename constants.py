@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path('/Users/delhoutecharles/Desktop/master 1/q4/recomender system/code/mlsmm2156-main/data/test')  # -- fill here the dataset size to use
+    DATA_PATH = Path(r'/Users/delhoutecharles/Documents/GitHub/Recommender-Systeem-/data/test')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
@@ -25,6 +25,6 @@ class Constant:
 
     # Rating scale
     RATINGS_SCALE = (1, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
-    EVALUATION_PATH = Path('/Users/delhoutecharles/Desktop/master 1/q4/recomender system/code/mlsmm2156-main/data/test/evaluations')
+    EVALUATION_PATH = Path(r'/Users/delhoutecharles/Documents/GitHub/Recommender-Systeem-/data/test/evaluations')
 
    

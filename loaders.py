@@ -9,12 +9,11 @@ def load_ratings(surprise_format=False):
     df_ratings = pd.read_csv(C.EVIDENCE_PATH / C.RATINGS_FILENAME)
     if surprise_format:
         reader = Reader(rating_scale=C.RATINGS_SCALE)
-
-        data = Dataset.load_from_df(df_ratings[['user_id', 'item_id', 'rating']], reader)
-        return data 
-    
+        data = Dataset.load_from_df(df_ratings[['userId', 'movieId', 'rating']], reader)
+        return data
     else:
         return df_ratings
+
 
 
 def load_items():
