@@ -1,5 +1,6 @@
 # local imports
-from models import *
+from models import ModelBaseline1, ModelBaseline2, ModelBaseline3, ModelBaseline4
+
 
 
 class EvalConfig:
@@ -10,7 +11,7 @@ class EvalConfig:
         ("baseline_3", ModelBaseline3, {}),
         ("baseline_4", ModelBaseline4, {"random_state": 1})
     ]
-    split_metrics = ["mae"]
+    split_metrics = ["mae","rmse"]
     loo_metrics = ["hit_rate"]
     full_metrics = ["novelty"]
 
