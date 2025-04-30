@@ -24,7 +24,7 @@ class Constant:
     USER_ITEM_RATINGS = [USER_ID_COL, ITEM_ID_COL, RATING_COL]
 
     # Rating scale
-    RATINGS_SCALE = None  # -- fill in here the ratings scale as a tuple (min_value, max_value)
+    RATINGS_SCALE = (1, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
     EVALUATION_PATH = Path('/Users/delhoutecharles/Desktop/master 1/q4/recomender system/code/mlsmm2156-main/data/test/evaluations')
 
    
