@@ -10,7 +10,7 @@ def load_ratings(surprise_format=False):
     if surprise_format:
         reader = Reader(rating_scale=C.RATINGS_SCALE)
 
-        data = Dataset.load_from_df(df[['user_id', 'item_id', 'rating']], reader)
+        data = Dataset.load_from_df(df_ratings[['user_id', 'item_id', 'rating']], reader)
         return data 
     
     else:
