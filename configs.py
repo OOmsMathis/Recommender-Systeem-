@@ -1,15 +1,12 @@
-# local imports
-from models import ModelBaseline1, ModelBaseline2, ModelBaseline3, ModelBaseline4,ContentBased
+# local import
+from models import ContentBased
+
 
 
 
 class EvalConfig:
     
     models = [
-        ("baseline_1", ModelBaseline1, {}),  # model_name, model class, model parameters (dict)
-        ("baseline_2", ModelBaseline2, {}),
-        ("baseline_3", ModelBaseline3, {}),
-        ("baseline_4", ModelBaseline4, {"random_state": 1}),
          #Ajouts pour le Content-Based
         ("content_linear", ContentBased, {
             "features_method": "title_length",  
@@ -50,7 +47,12 @@ class EvalConfig:
 ]
         
    
-    
+        ("content_linear", ContentBased, {
+            "features_method": "Year_of_release",  
+            "regressor_method": "linear"
+        }),
+    ]
+
     split_metrics = ["mae","rmse"]
     loo_metrics = ["hit_rate"]
     full_metrics = ["novelty"]
