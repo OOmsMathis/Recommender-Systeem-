@@ -14,6 +14,7 @@ from loaders import load_ratings
 from loaders import load_items
 import constants as C
 from constants import Constant as C
+from sklearn.feature_extraction.text import CountVectorizer
 
 
 def get_top_n(predictions, n):
@@ -46,7 +47,7 @@ def get_top_n(predictions, n):
 
     return top_n
 
-
+""" 
 # First algorithm
 class ModelBaseline1(AlgoBase):
     def __init__(self):
@@ -89,6 +90,8 @@ class ModelBaseline4(SVD):
     def __init__(self,random_state = 1):
         SVD.__init__(self, n_factors=100)
 
+ """
+
 #content_based
 class ContentBased(AlgoBase):
     def __init__(self, features_method, regressor_method):
@@ -96,6 +99,31 @@ class ContentBased(AlgoBase):
         self.features_method = features_method 
         self.regressor_method = regressor_method
         self.content_features = self.create_content_features(features_method)
+
+    def combine_features(self, df_items, methods):
+        """Combine multiple feature methods."""
+        df_features = pd.DataFrame(index=df_items.index)
+        for method in methods:
+            if method == "title_length":
+                df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
+                df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
+                mean_title_length = int(df_title_length['title_length'].replace(0, np.nan).mean())
+                df_title_length.loc[df_title_length['title_length'] == 0, 'title_length'] = mean_title_length
+                title_length_min = df_title_length['title_length'].min()
+                title_length_max = df_title_length['title_length'].max()
+                df_title_length['title_length'] = (df_title_length['title_length'] - title_length_min) / (title_length_max - title_length_min)
+                df_features = pd.concat([df_features, df_title_length], axis=1)
+            elif method == "Year_of_release":
+                year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
+                df_year = year.to_frame(name='year_of_release')
+                mean_year = df_year.replace(0, np.nan).mean().iloc[0]
+                df_year['year_of_release'] = df_year['year_of_release'].fillna(mean_year).astype(int)
+                year_min = df_year['year_of_release'].min()
+                year_max = df_year['year_of_release'].max()
+                df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
+                df_features = df_features.join(df_year, how='left')
+        return df_features
+
 
     def create_content_features(self, features_method):
         """Content Analyzer"""
@@ -123,6 +151,12 @@ class ContentBased(AlgoBase):
             year_max = df_year['year_of_release'].max()
             df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
             df_features = df_features.join(df_year, how='left')
+
+        elif features_method == "Timestamp":
+            Timestamp = df_items[C.TIMESTAMP_COL].astype(float)
+            df_timestamp = Timestamp.to_frame(name='timestamp')
+            df_features = df_features.join(df_timestamp, how='left')
+
         else: # (implement other feature creations here)
             raise NotImplementedError(f'Feature method {features_method} not yet implemented')
         return df_features
