@@ -4,8 +4,8 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path('/Users/delhoutecharles/Documents/GitHub/Recommender-Systeem-/data/test')  # -- fill here the dataset size to use
-
+    DATA_PATH = Path(f'C:\Users\mathi\OneDrive - UCL\Documents\GitHub\Recommender-Systeem-\mlsmm2156\data\test')  # -- fill here the dataset size to use
+    
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
     # - item
