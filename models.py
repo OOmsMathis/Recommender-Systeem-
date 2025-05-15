@@ -117,6 +117,8 @@ class ContentBased(AlgoBase):
         df_features = pd.DataFrame(index=df_items.index)
         if features_method is None:
            df_features = pd.DataFrame(index=df_items.index)
+
+
         elif features_method == "title_length": # a naive method that creates only 1 feature based on title length
             df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
             df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
@@ -137,6 +139,48 @@ class ContentBased(AlgoBase):
             year_max = df_year['year_of_release'].max()
             df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
             df_features = df_features.join(df_year, how='left')
+        elif features_method == "Genre_binary":
+            # Utilisation de binaires pour les genres
+            df_genre_list = df_items[C.GENRES_COL].str.split('|').explode().to_frame('genre_list')
+            df_dummies = pd.get_dummies(df_genre_list['genre_list'])
+            df_genres = df_dummies.groupby(df_genre_list.index).sum()
+            # Ensure the index matches that of df_items
+            df_genres = df_genres.reindex(df_items.index).fillna(0).astype(int)
+            df_features = pd.concat([df_features, df_genres], axis=1)
+        elif features_method == "Genre_tfidf":
+            # Combine genres into a single string per item
+            df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ')
+            tfidf = TfidfVectorizer()
+            tfidf_matrix = tfidf.fit_transform(df_items['genre_string'])
+            tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+            df_features = pd.concat([df_features, tfidf_df], axis=1)
+        elif features_method == "Tags":
+            tags_path = str(C.CONTENT_PATH / "tags.csv")
+            df_tags = pd.read_csv(tags_path)
+            df_tags = df_tags.dropna(subset=['tag'])
+            df_tags['tag'] = df_tags['tag'].astype(str)
+            df_tags_grouped = df_tags.groupby('movieId')['tag'].agg(' '.join).to_frame('tags')
+            tfidf = TfidfVectorizer()
+            tfidf_matrix = tfidf.fit_transform(df_tags_grouped['tags'])
+            tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf.get_feature_names_out())
+            df_features = pd.concat([df_features, tfidf_df], axis=1)
+        elif features_method == "tmdb_vote_average":
+            tmdb_path = str(C.CONTENT_PATH / "tmdb_full_features.csv")
+            df_tmdb = pd.read_csv(tmdb_path)
+            # Assure-toi que les colonnes sont bien nommées 'movieId' et 'vote_average'
+            df_tmdb = df_tmdb[['movieId', 'vote_average']].drop_duplicates('movieId')
+            df_tmdb = df_tmdb.set_index('movieId')
+            # Remplir les valeurs manquantes par la moyenne
+            mean_vote = df_tmdb['vote_average'].mean()
+            df_tmdb['vote_average'] = df_tmdb['vote_average'].fillna(mean_vote)
+            # Normaliser entre 0 et 1
+            min_vote = df_tmdb['vote_average'].min()
+            max_vote = df_tmdb['vote_average'].max()
+            df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
+            df_features = df_features.join(df_tmdb, how='left')
+
+
+
         else: # (implement other feature creations here)
             raise NotImplementedError(f'Feature method {features_method} not yet implemented')
         return df_features
@@ -228,4 +272,5 @@ class ContentBased(AlgoBase):
             
 
         return score
+
 
