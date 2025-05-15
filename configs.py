@@ -11,19 +11,46 @@ class EvalConfig:
         ("baseline_3", ModelBaseline3, {}),
         ("baseline_4", ModelBaseline4, {"random_state": 1}),
          #Ajouts pour le Content-Based
-        ("content_random_score", ContentBased, {
-            "features_method": None,
-            "regressor_method": "random_score"
-        }),
-        ("content_random_sample", ContentBased, {
-            "features_method": None,
-            "regressor_method": "random_sample"
-        }),
         ("content_linear", ContentBased, {
             "features_method": "title_length",  
             "regressor_method": "linear"
         }),
-    ]
+          ("content_lasso", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "lasso"
+         }),
+          ("content_random_forest", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "random_forest"
+        }),
+        ("content_neural_network", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "neural_network"
+         }),
+        ("content_decision_tree", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "decision_tree"
+        }),
+        ("content_ridge", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "ridge"
+        }),
+        ("content_gradient_boosting", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "gradient_boosting"
+        }),
+        ("content_knn", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "knn"
+        }),
+        ("content_elastic_net", ContentBased, {
+        "features_method": "title_length",
+        "regressor_method": "elastic_net"
+        }),
+]
+        
+   
+    
     split_metrics = ["mae","rmse"]
     loo_metrics = ["hit_rate"]
     full_metrics = ["novelty"]
