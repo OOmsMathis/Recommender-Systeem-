@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path(r'C:\Users\mathi\OneDrive - UCL\Documents\GitHub\Recommender-Systeem-\mlsmm2156\data\hackathon')  # -- fill here the dataset size to use
+    DATA_PATH = Path('mlsmm2156\hackaton')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
@@ -26,6 +26,6 @@ class Constant:
 
     # Rating scale
     RATINGS_SCALE = (1, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
-    EVALUATION_PATH = Path('data/small/evaluations')
+    EVALUATION_PATH = Path('hackaton/evaluations')
 
    
