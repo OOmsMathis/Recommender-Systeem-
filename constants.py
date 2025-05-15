@@ -13,6 +13,7 @@ class Constant:
     ITEM_ID_COL = 'movieId'
     LABEL_COL = 'title'
     GENRES_COL = 'genres'
+    
 
     # Evidence
     EVIDENCE_PATH = DATA_PATH / 'evidence'
