@@ -13,11 +13,11 @@ def unzip_and_remove(zip_filename):
             zip_filename,
         )
     files = zf.ZipFile(zip_filename, 'r')
-    files.extractall('mlsmm2156')
+    files.extractall('Recommender-Systeem-/data')
     files.close()
     os.remove(zip_filename)
-    shutil.rmtree('mlsmm2156/__MACOSX')  # remove macosx data for Mac users
+    shutil.rmtree('Recommender-Systeem-/data/__MACOSX')  # remove macosx data for Mac users
 
 
 if __name__ == "__main__":
-    unzip_and_remove("mlsmm2156/data.zip")
+    unzip_and_remove("/Users/delhoutecharles/Documents/GitHub/Recommender-Systeem-/data/hackathon.zip")

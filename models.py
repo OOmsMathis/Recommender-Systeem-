@@ -1,6 +1,6 @@
 # standard library imports
 from collections import defaultdict
-
+###
 # third parties imports
 import numpy as np
 import random as rd
@@ -14,7 +14,10 @@ from loaders import load_ratings
 from loaders import load_items
 import constants as C
 from constants import Constant as C
+
+=======
 from sklearn.feature_extraction.text import CountVectorizer
+
 
 
 def get_top_n(predictions, n):
@@ -90,7 +93,8 @@ class ModelBaseline4(SVD):
     def __init__(self,random_state = 1):
         SVD.__init__(self, n_factors=100)
 
- """
+
+
 
 #content_based
 class ContentBased(AlgoBase):
@@ -99,6 +103,8 @@ class ContentBased(AlgoBase):
         self.features_method = features_method 
         self.regressor_method = regressor_method
         self.content_features = self.create_content_features(features_method)
+
+
 
     def combine_features(self, df_items, methods):
         """Combine multiple feature methods."""
@@ -123,6 +129,7 @@ class ContentBased(AlgoBase):
                 df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
                 df_features = df_features.join(df_year, how='left')
         return df_features
+
 
 
     def create_content_features(self, features_method):
@@ -151,6 +158,8 @@ class ContentBased(AlgoBase):
             year_max = df_year['year_of_release'].max()
             df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
             df_features = df_features.join(df_year, how='left')
+
+=======
 
         elif features_method == "Timestamp":
             Timestamp = df_items[C.TIMESTAMP_COL].astype(float)
