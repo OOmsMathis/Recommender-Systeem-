@@ -24,6 +24,7 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.linear_model import Ridge, Lasso
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 def get_top_n(predictions, n):
@@ -111,78 +112,86 @@ class ContentBased(AlgoBase):
 
         
 
-    def create_content_features(self, features_method):
+    def create_content_features(self, features_methods):
         """Content Analyzer"""
         df_items = load_items()
         df_features = pd.DataFrame(index=df_items.index)
-        if features_method is None:
-           df_features = pd.DataFrame(index=df_items.index)
-
-
-        elif features_method == "title_length": # a naive method that creates only 1 feature based on title length
-            df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
-            df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
-            mean_title_length = int(df_title_length['title_length'].replace(0, np.nan).mean())
-            df_title_length.loc[df_title_length['title_length'] == 0, 'title_length'] = mean_title_length
-            # Normaliser la longueur des titre entre 0 et 1
-            title_length_min = df_title_length['title_length'].min()
-            title_length_max = df_title_length['title_length'].max()
-            df_title_length['title_length'] = (df_title_length['title_length'] - title_length_min) / (title_length_max - title_length_min)
-            df_features = pd.concat([df_features, df_title_length], axis=1)
-        elif features_method == "Year_of_release":
-            year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
-            df_year = year.to_frame(name='year_of_release')
-            mean_year = df_year.replace(0, np.nan).mean().iloc[0]
-            df_year['year_of_release'] = df_year['year_of_release'].fillna(mean_year).astype(int)
-             # Normaliser les dates de sortie 
-            year_min = df_year['year_of_release'].min()
-            year_max = df_year['year_of_release'].max()
-            df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
-            df_features = df_features.join(df_year, how='left')
-        elif features_method == "Genre_binary":
-            # Utilisation de binaires pour les genres
-            df_genre_list = df_items[C.GENRES_COL].str.split('|').explode().to_frame('genre_list')
-            df_dummies = pd.get_dummies(df_genre_list['genre_list'])
-            df_genres = df_dummies.groupby(df_genre_list.index).sum()
-            # Ensure the index matches that of df_items
-            df_genres = df_genres.reindex(df_items.index).fillna(0).astype(int)
-            df_features = pd.concat([df_features, df_genres], axis=1)
-        elif features_method == "Genre_tfidf":
-            # Combine genres into a single string per item
-            df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ')
-            tfidf = TfidfVectorizer()
-            tfidf_matrix = tfidf.fit_transform(df_items['genre_string'])
-            tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
-            df_features = pd.concat([df_features, tfidf_df], axis=1)
-        elif features_method == "Tags":
-            tags_path = str(C.CONTENT_PATH / "tags.csv")
-            df_tags = pd.read_csv(tags_path)
-            df_tags = df_tags.dropna(subset=['tag'])
-            df_tags['tag'] = df_tags['tag'].astype(str)
-            df_tags_grouped = df_tags.groupby('movieId')['tag'].agg(' '.join).to_frame('tags')
-            tfidf = TfidfVectorizer()
-            tfidf_matrix = tfidf.fit_transform(df_tags_grouped['tags'])
-            tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf.get_feature_names_out())
-            df_features = pd.concat([df_features, tfidf_df], axis=1)
-        elif features_method == "tmdb_vote_average":
-            tmdb_path = str(C.CONTENT_PATH / "tmdb_full_features.csv")
-            df_tmdb = pd.read_csv(tmdb_path)
-            # Assure-toi que les colonnes sont bien nommées 'movieId' et 'vote_average'
-            df_tmdb = df_tmdb[['movieId', 'vote_average']].drop_duplicates('movieId')
-            df_tmdb = df_tmdb.set_index('movieId')
-            # Remplir les valeurs manquantes par la moyenne
-            mean_vote = df_tmdb['vote_average'].mean()
-            df_tmdb['vote_average'] = df_tmdb['vote_average'].fillna(mean_vote)
-            # Normaliser entre 0 et 1
-            min_vote = df_tmdb['vote_average'].min()
-            max_vote = df_tmdb['vote_average'].max()
-            df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
-            df_features = df_features.join(df_tmdb, how='left')
-
-
-
-        else: # (implement other feature creations here)
-            raise NotImplementedError(f'Feature method {features_method} not yet implemented')
+        if features_methods is None:
+            df_features = pd.DataFrame(index=df_items.index)
+        if isinstance(features_methods, str):
+            features_methods = [features_methods]
+        
+        for feature_method in features_methods:
+            if feature_method == "title_length":
+                df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
+                df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
+                mean_title_length = int(df_title_length['title_length'].replace(0, np.nan).mean())
+                df_title_length.loc[df_title_length['title_length'] == 0, 'title_length'] = mean_title_length
+                title_length_min = df_title_length['title_length'].min()
+                title_length_max = df_title_length['title_length'].max()
+                df_title_length['title_length'] = (df_title_length['title_length'] - title_length_min) / (title_length_max - title_length_min)
+                df_features = pd.concat([df_features, df_title_length], axis=1)
+            elif feature_method == "Year_of_release":
+                year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
+                df_year = year.to_frame(name='year_of_release')
+                mean_year = df_year.replace(0, np.nan).mean().iloc[0]
+                df_year['year_of_release'] = df_year['year_of_release'].fillna(mean_year).astype(int)
+                year_min = df_year['year_of_release'].min()
+                year_max = df_year['year_of_release'].max()
+                df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
+                df_features = pd.concat([df_features, df_year], axis=1)
+            elif feature_method == "average_ratings":
+                average_rating = df_ratings.groupby('movieId')[C.RATING_COL].mean().rename('average_rating').to_frame()
+                global_avg = df_ratings[C.RATING_COL].mean()
+                average_rating['average_rating'] = average_rating['average_rating'].fillna(global_avg)
+                avg_rating_min = average_rating['average_rating'].min()
+                avg_rating_max = average_rating['average_rating'].max()
+                average_rating['average_rating'] = (average_rating['average_rating'] - avg_rating_min) / (avg_rating_max - avg_rating_min)
+                df_features = df_features.join(average_rating, how='left')
+            elif feature_method == "count_ratings":
+                rating_count = df_ratings.groupby('movieId')[C.RATING_COL].size().rename('rating_count').to_frame()
+                rating_count['rating_count'] = rating_count['rating_count'].fillna(0).astype(int)
+                mean_rating_count = int(rating_count['rating_count'].replace(0, np.nan).mean())
+                rating_count.loc[rating_count['rating_count'] == 0, 'rating_count'] = mean_rating_count
+                rating_count_min = rating_count['rating_count'].min()
+                rating_count_max = rating_count['rating_count'].max()
+                rating_count['rating_count'] = (rating_count['rating_count'] - rating_count_min) / (rating_count_max - rating_count_min)
+                df_features = df_features.join(rating_count, how='left')
+            elif feature_method == "Genre_binary":
+                df_genre_list = df_items[C.GENRES_COL].str.split('|').explode().to_frame('genre_list')
+                df_dummies = pd.get_dummies(df_genre_list['genre_list'])
+                df_genres = df_dummies.groupby(df_genre_list.index).sum()
+                df_genres = df_genres.reindex(df_items.index).fillna(0).astype(int)
+                df_features = pd.concat([df_features, df_genres], axis=1)
+            elif feature_method == "Genre_tfidf":
+                df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ')
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_items['genre_string'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+            elif feature_method == "Tags":
+                tags_path = str(C.CONTENT_PATH / "tags.csv")
+                df_tags = pd.read_csv(tags_path)
+                df_tags = df_tags.dropna(subset=['tag'])
+                df_tags['tag'] = df_tags['tag'].astype(str)
+                df_tags_grouped = df_tags.groupby('movieId')['tag'].agg(' '.join).to_frame('tags')
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_tags_grouped['tags'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+            elif feature_method == "tmdb_vote_average":
+                tmdb_path = str(C.CONTENT_PATH / "tmdb_full_features.csv")
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'vote_average']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_vote = df_tmdb['vote_average'].mean()
+                df_tmdb['vote_average'] = df_tmdb['vote_average'].fillna(mean_vote)
+                min_vote = df_tmdb['vote_average'].min()
+                max_vote = df_tmdb['vote_average'].max()
+                df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
+                df_features = df_features.join(df_tmdb, how='left')
+            else:
+                raise NotImplementedError(f'Feature method {feature_method} not yet implemented')
         return df_features
     
 
@@ -272,5 +281,4 @@ class ContentBased(AlgoBase):
             
 
         return score
-
 
