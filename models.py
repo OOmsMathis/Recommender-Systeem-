@@ -235,6 +235,7 @@ class ContentBased(AlgoBase):
         if self.regressor_method == 'linear':
             score = self.user_profile[u].predict(item_features)[0]
         elif self.regressor_method in [
+        'linear',
         'lasso',
         'random_forest',
         'neural_network',
