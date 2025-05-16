@@ -7,13 +7,13 @@ class EvalConfig:
     
     models = [
         
-        ("content_1", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release"],  
+        ("content_1combi", ContentBased, {
+            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags","tfidf_relevance"],  
             "regressor_method": "linear"
         }),
-        ("content_2", ContentBased, {
-            "features_methods": ["title_length"],  
-            "regressor_method": "linear"
+        ("content_2combi", ContentBased, {
+            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags","tfidf_relevance"],  
+            "regressor_method": "ridge"
         }),
         ("content_3", ContentBased, {
             "features_methods": ["Year_of_release"],  
