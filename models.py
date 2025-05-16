@@ -115,6 +115,7 @@ class ContentBased(AlgoBase):
     def create_content_features(self, features_methods):
         """Content Analyzer"""
         df_items = load_items()
+        df_ratings = load_ratings()
         df_features = pd.DataFrame(index=df_items.index)
         if features_methods is None:
             df_features = pd.DataFrame(index=df_items.index)
