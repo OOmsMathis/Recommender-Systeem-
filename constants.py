@@ -8,6 +8,7 @@ class Constant:
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
+    VISUAL = DATA_PATH / 'content'/'visuals'
     # - item
     ITEMS_FILENAME = 'movies.csv'
     ITEM_ID_COL = 'movieId'

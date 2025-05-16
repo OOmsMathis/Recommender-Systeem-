@@ -6,33 +6,24 @@ from models import ContentBased
 class EvalConfig:
     
     models = [
-        
-        ("content_linear", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
-            "regressor_method": "linear"
-        }),
+
         ("content_ridge", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
+            "features_methods": [ "average_ratings","genome_tags"],  
             "regressor_method": "ridge"
         }),
-        ("content_knn", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
-            "regressor_method": "knn"
+        ("content_ridge1", ContentBased, {
+            "features_methods": [ "genome_tags"],  
+            "regressor_method": "ridge"
         }),
-        ("content_lasso", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
-            "regressor_method": "lasso"
+
+        ("content_ridge2", ContentBased, {
+            "features_methods": [ "average_ratings"],  
+            "regressor_method": "ridge"
         }),
-        ("content_elastic_net", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
-            "regressor_method": "elastic_net"
+        ("content_ridge3", ContentBased, {
+            "features_methods": [ "average_ratings","title_tfidf","tmdb_cast"],  
+            "regressor_method": "ridge"
         }),
-        ("content_decision_tree", ContentBased, {
-            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
-            "regressor_method": "decision_tree"
-        }),
-        
-        
 ]
         
     
@@ -51,4 +42,13 @@ class EvalConfig:
  ("content_2combii", ContentBased, {
             "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
             "regressor_method": "ridge"
+
+("content_knn", ContentBased, {
+            "features_methods": ["title_length", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","genome_tags"],  
+            "regressor_method": "knn"
+        }),
+        ("content_ridge4", ContentBased, {
+            "features_methods": ["tmdb_vote_average", "Year_of_release", "average_ratings",'count_ratings',"Tags","Genre_binary","Genre_tfidf","genome_tags"],  
+            "regressor_method": "gradient_boosting"
+        }),
 """

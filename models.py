@@ -197,6 +197,7 @@ class ContentBased(AlgoBase):
                 max_vote = df_tmdb['vote_average'].max()
                 df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
                 df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
          elif feature_method == "title_tfidf":
                 # Combine titles into a single string per item
                 df_items['title_string'] = df_items[C.LABEL_COL].fillna('')
@@ -244,9 +245,138 @@ class ContentBased(AlgoBase):
                 tfidf_matrix = tfidf.fit_transform(df_texts['tags'])
                 # Créer le DataFrame final de features
                 df_features = pd.DataFrame(tfidf_matrix.toarray(), index=df_texts.index, columns=tfidf.get_feature_names_out())
+         elif feature_method == "visuals":
+                visual_path = C.VISUAL/ "LLVisualFeatures13K_QuantileLog.csv"
+                df_visual = pd.read_csv(visual_path).set_index("ML_Id")
 
+                # Nettoyage
+                df_visual = df_visual.fillna(0)
 
-             
+                # Normalisation colonne par colonne
+                for col in df_visual.columns:
+                    col_min = df_visual[col].min()
+                    col_max = df_visual[col].max()
+                    if col_max != col_min:
+                        df_visual[col] = (df_visual[col] - col_min) / (col_max - col_min)
+
+                # Fusion dans df_features
+                df_features = df_features.join(df_visual, how='left')
+                 # Très important : remplacer les NaN après fusion
+                df_features = df_features.fillna(0)
+         elif feature_method == "tmdb_popularity":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'popularity']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_popularity = df_tmdb['popularity'].mean()
+                df_tmdb['popularity'] = df_tmdb['popularity'].fillna(mean_popularity)
+                min_popularity = df_tmdb['popularity'].min()
+                max_popularity = df_tmdb['popularity'].max()
+                df_tmdb['popularity'] = (df_tmdb['popularity'] - min_popularity) / (max_popularity - min_popularity)
+                df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
+
+         elif feature_method == "tmdb_budget":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'budget']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_budget = df_tmdb['budget'].mean()
+                df_tmdb['budget'] = df_tmdb['budget'].fillna(mean_budget)
+                min_budget = df_tmdb['budget'].min()
+                max_budget = df_tmdb['budget'].max()
+                df_tmdb['budget'] = (df_tmdb['budget'] - min_budget) / (max_budget - min_budget)
+                df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
+            
+         elif feature_method == "tmdb_revenue":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'revenue']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_revenue = df_tmdb['revenue'].mean()
+                df_tmdb['revenue'] = df_tmdb['revenue'].fillna(mean_revenue)
+                min_revenue = df_tmdb['revenue'].min()
+                max_revenue = df_tmdb['revenue'].max()
+                df_tmdb['revenue'] = (df_tmdb['revenue'] - min_revenue) / (max_revenue - min_revenue)
+                df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
+            
+         elif feature_method == "tmdb_profit":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb['profit'] = df_tmdb['revenue'] - df_tmdb['budget']
+                df_tmdb = df_tmdb[['movieId', 'profit']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_profit = df_tmdb['profit'].mean()
+                df_tmdb['profit'] = df_tmdb['profit'].fillna(mean_profit)
+                min_profit = df_tmdb['profit'].min()
+                max_profit = df_tmdb['profit'].max()
+                df_tmdb['profit'] = (df_tmdb['profit'] - min_profit) / (max_profit - min_profit)
+                df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
+            
+         elif feature_method == "tmdb_runtime":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'runtime']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_runtime = df_tmdb['runtime'].mean()
+                df_tmdb['runtime'] = df_tmdb['runtime'].fillna(mean_runtime)
+                min_runtime = df_tmdb['runtime'].min()
+                max_runtime = df_tmdb['runtime'].max()
+                df_tmdb['runtime'] = (df_tmdb['runtime'] - min_runtime) / (max_runtime - min_runtime)
+                df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
+            
+         elif feature_method == "tmdb_vote_count":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'vote_count']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                mean_vote_count = df_tmdb['vote_count'].mean()
+                df_tmdb['vote_count'] = df_tmdb['vote_count'].fillna(mean_vote_count)
+                min_vote_count = df_tmdb['vote_count'].min()
+                max_vote_count = df_tmdb['vote_count'].max()
+                df_tmdb['vote_count'] = (df_tmdb['vote_count'] - min_vote_count) / (max_vote_count - min_vote_count)
+                df_features = df_features.join(df_tmdb, how='left')
+                df_features = df_features.fillna(0)
+                df_features = df_features.fillna(0)
+            
+         elif feature_method == "tmdb_cast":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'cast']].drop_duplicates('movieId')
+                df_tmdb['cast'] = df_tmdb['cast'].fillna('')
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_tmdb['cast'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb['movieId'], columns=tfidf.get_feature_names_out())
+                df_features = df_features.join(tfidf_df, how='left')
+                df_features = df_features.fillna(0)
+            
+         elif feature_method == "tmdb_director":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'director']].drop_duplicates('movieId')
+                df_tmdb['director'] = df_tmdb['director'].fillna('')
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_tmdb['director'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb['movieId'], columns=tfidf.get_feature_names_out())
+                df_features = df_features.join(tfidf_df, how='left')
+                df_features = df_features.fillna(0)
+
+         elif feature_method == "tmdb_original_language":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'original_language']].drop_duplicates('movieId')
+                df_tmdb = df_tmdb.set_index('movieId')
+                df_tmdb['original_language'] = df_tmdb['original_language'].fillna('unknown')
+                # One-hot encoding des langues
+                df_lang_dummies = pd.get_dummies(df_tmdb['original_language'], prefix='lang')
+                # Gérer les valeurs manquantes après le merge
+                df_lang_dummies = df_lang_dummies.reindex(df_features.index, fill_value=0)
+                df_features = df_features.join(tfidf_df, how='left')
+                df_features = df_features.fillna(0)
          else: # (implement other feature creations here)
             raise NotImplementedError(f'Feature method {features_methods} not yet implemented')
         return df_features
@@ -284,7 +414,7 @@ class ContentBased(AlgoBase):
                 elif self.regressor_method == 'decision_tree':
                     model = DecisionTreeRegressor(max_depth=10, random_state=42)
                 elif self.regressor_method == 'ridge':
-                    model = Ridge(alpha=1.0)
+                    model = Ridge(alpha=10.0)
                 elif self.regressor_method == 'gradient_boosting':
                     model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
                 elif  self.regressor_method == 'knn':
