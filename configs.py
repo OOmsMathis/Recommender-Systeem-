@@ -9,7 +9,7 @@ class EvalConfig:
         
         ("content_linear", ContentBased, {
             "features_methods": ["title_length", "Year_of_release"],  
-            "regressor_method": "linear"
+            "regressor_method": "lasso"
         }),
         ("content_linear", ContentBased, {
             "features_methods": ["title_length","Year_of_release"],  
