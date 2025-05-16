@@ -15,6 +15,16 @@ from loaders import load_items
 import constants as C
 from constants import Constant as C
 
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neural_network import MLPRegressor
+from sklearn.linear_model import ElasticNet
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.linear_model import Ridge, Lasso
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.tree import DecisionTreeRegressor
+
+
 
 def get_top_n(predictions, n):
     """Return the top-N recommendation for each user from a set of predictions.
@@ -91,19 +101,25 @@ class ModelBaseline4(SVD):
 
 #content_based
 class ContentBased(AlgoBase):
-    def __init__(self, features_method, regressor_method):
+    def __init__(self, features_methods, regressor_method):
         AlgoBase.__init__(self)
-        self.features_method = features_method 
+        self.features_method = features_methods
         self.regressor_method = regressor_method
-        self.content_features = self.create_content_features(features_method)
+        self.content_features = self.create_content_features(features_methods)
+        
 
-    def create_content_features(self, features_method):
+    def create_content_features(self, features_methods):
         """Content Analyzer"""
         df_items = load_items()
+        df_ratings = load_ratings()
         df_features = pd.DataFrame(index=df_items.index)
-        if features_method is None:
+        if features_methods is None:
            df_features = pd.DataFrame(index=df_items.index)
-        elif features_method == "title_length": # a naive method that creates only 1 feature based on title length
+        if isinstance(features_methods, str):
+         features_methods = [features_methods]
+        
+        for feature_method in features_methods:
+         if feature_method == "title_length": # a naive method that creates only 1 feature based on title length
             df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
             df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
             mean_title_length = int(df_title_length['title_length'].replace(0, np.nan).mean())
@@ -113,7 +129,7 @@ class ContentBased(AlgoBase):
             title_length_max = df_title_length['title_length'].max()
             df_title_length['title_length'] = (df_title_length['title_length'] - title_length_min) / (title_length_max - title_length_min)
             df_features = pd.concat([df_features, df_title_length], axis=1)
-        elif features_method == "Year_of_release":
+         elif feature_method == "Year_of_release":
             year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
             df_year = year.to_frame(name='year_of_release')
             mean_year = df_year.replace(0, np.nan).mean().iloc[0]
@@ -122,15 +138,36 @@ class ContentBased(AlgoBase):
             year_min = df_year['year_of_release'].min()
             year_max = df_year['year_of_release'].max()
             df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
-            df_features = df_features.join(df_year, how='left')
-        else: # (implement other feature creations here)
-            raise NotImplementedError(f'Feature method {features_method} not yet implemented')
+            df_features = pd.concat([df_features, df_year], axis=1)
+         elif feature_method =="average_ratings":
+            # moyenne des notes par films
+            average_rating = df_ratings.groupby('movieId')[C.RATING_COL].mean().rename('average_rating').to_frame()
+            global_avg = df_ratings['rating'].mean()
+            average_rating['average_rating'] = average_rating['average_rating'].fillna(global_avg)
+            # Normaliser la moyenne des notes par films
+            avg_rating_min = average_rating['average_rating'].min()
+            avg_rating_max = average_rating['average_rating'].max()
+            average_rating['average_rating'] = (average_rating['average_rating'] - avg_rating_min) / (avg_rating_max - avg_rating_min)
+            df_features = df_features.join(average_rating, how='left')
+         elif feature_method =="count_ratings":
+             # Count the number of ratings for each movie
+            rating_count = df_ratings.groupby('movieId')[C.RATING_COL].size().rename('rating_count').to_frame()
+            rating_count['rating_count'] = rating_count['rating_count'].fillna(0).astype(int)
+            mean_rating_count = int(rating_count['rating_count'].replace(0, np.nan).mean())
+            rating_count.loc[rating_count['rating_count'] == 0, 'rating_count'] = mean_rating_count
+                # Normalize the rating count
+            rating_count_min = rating_count['rating_count'].min()
+            rating_count_max = rating_count['rating_count'].max()
+            rating_count['rating_count'] = (rating_count['rating_count'] - rating_count_min) / (rating_count_max - rating_count_min)
+            df_features = df_features.join(rating_count, how='left')
+             
+         else: # (implement other feature creations here)
+            raise NotImplementedError(f'Feature method {features_methods} not yet implemented')
         return df_features
     
 
     def fit(self, trainset):
         """Profile Learner"""
-        self.content_features = self.create_content_features(self.features_method)
         AlgoBase.fit(self, trainset)
         self.user_profile = {u: None for u in trainset.all_users()}
         for u in self.user_profile:
@@ -150,18 +187,32 @@ class ContentBased(AlgoBase):
                 # Gère les NaNs dans les features
                 X = np.nan_to_num(X)
 
-                if self.regressor_method == 'random_score':
-                    self.user_profile[u] = rd.uniform(0.5, 5.0)
-                elif self.regressor_method == 'random_sample':
-                    self.user_profile[u] = [rating for _, rating in self.trainset.ur[u]]
-                elif self.regressor_method == 'linear':
-                    # Use linear regression
+     
+                if self.regressor_method == 'linear': # Use linear regression
                     model = LinearRegression(fit_intercept=True)
-                    model.fit(X, y)
-                    self.user_profile[u] = model
+                elif self.regressor_method == 'lasso':
+                    model = Lasso(alpha=0.1)
+                elif self.regressor_method == 'random_forest':
+                    model = RandomForestRegressor(n_estimators=10, max_depth=10, random_state=42)
+                elif self.regressor_method== 'neural_network':
+                    model = MLPRegressor(hidden_layer_sizes=(60, 60), max_iter=2500, learning_rate_init=0.01, alpha=0.0001, random_state=42)
+                elif self.regressor_method == 'decision_tree':
+                    model = DecisionTreeRegressor(max_depth=10, random_state=42)
+                elif self.regressor_method == 'ridge':
+                    model = Ridge(alpha=1.0)
+                elif self.regressor_method == 'gradient_boosting':
+                    model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+                elif  self.regressor_method == 'knn':
+                    model = KNeighborsRegressor(n_neighbors=5)
+                elif self.regressor_method == 'elastic_net':
+                    model = ElasticNet(alpha=0.1, l1_ratio=0.5)
+
                 else:
-                    self.user_profile[u] = None
-                    # implement here the regressor fitting) 
+                    raise ValueError(f"Unknown regressor method: {self.regressor_method}")
+                    
+                model.fit(X, y)
+                self.user_profile[u] = model
+
             else:
              self.user_profile[u] = None
              
@@ -181,20 +232,21 @@ class ContentBased(AlgoBase):
         else:
             return self.trainset.global_mean
     
-        if self.regressor_method == 'random_score':
-            rd.seed()
-            score = rd.uniform(0.5,5)
-
-        elif self.regressor_method == 'random_sample':
-            rd.seed()
-            score = rd.choice(self.user_profile[u])
-        elif self.regressor_method == 'linear':
+        if self.regressor_method == 'linear':
             score = self.user_profile[u].predict(item_features)[0]
+        elif self.regressor_method in [
+        'lasso',
+        'random_forest',
+        'neural_network',
+        'decision_tree',
+        'ridge',
+        'gradient_boosting',
+        'knn',
+        'elastic_net' ]:
+          score = self.user_profile[u].predict(item_features)[0]
 
         else:
             score=None
             
 
         return score
-
-
