@@ -414,7 +414,7 @@ class ContentBased(AlgoBase):
                 elif self.regressor_method == 'decision_tree':
                     model = DecisionTreeRegressor(max_depth=10, random_state=42)
                 elif self.regressor_method == 'ridge':
-                    model = Ridge(alpha=10.0)
+                    model = Ridge(alpha=15.0)
                 elif self.regressor_method == 'gradient_boosting':
                     model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
                 elif  self.regressor_method == 'knn':
