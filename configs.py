@@ -11,46 +11,9 @@ class EvalConfig:
             "features_methods": ["title_length", "Year_of_release"],  
             "regressor_method": "linear"
         }),
-          ("content_lasso", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "lasso"
-         }),
-          ("content_random_forest", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "random_forest"
-        }),
-        ("content_neural_network", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "neural_network"
-         }),
-        ("content_decision_tree", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "decision_tree"
-        }),
-        ("content_ridge", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "ridge"
-        }),
-        ("content_gradient_boosting", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "gradient_boosting"
-        }),
-        ("content_knn", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "knn"
-        }),
-        ("content_elastic_net", ContentBased, {
-        "features_methods": ["title_length"],
-        "regressor_method": "elastic_net"
-        }),
+        
 ]
         
-   
-    
-    split_metrics = ["mae","rmse"]
-    loo_metrics = ["hit_rate"]
-    full_metrics = ["novelty"]
-
     # Split parameters
     test_size = 0.25  # -- configure the test_size (from 0 to 1) --
 
