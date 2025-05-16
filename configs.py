@@ -7,17 +7,17 @@ class EvalConfig:
     
     models = [
         
-        ("content_lasso1", ContentBased, {
+        ("content_1", ContentBased, {
             "features_methods": ["title_length", "Year_of_release"],  
-            "regressor_method": "lasso"
+            "regressor_method": "linear"
         }),
-        ("content_lasso2", ContentBased, {
+        ("content_2", ContentBased, {
             "features_methods": ["title_length"],  
-            "regressor_method": "lasso"
+            "regressor_method": "linear"
         }),
-        ("content_lasso3", ContentBased, {
+        ("content_3", ContentBased, {
             "features_methods": ["Year_of_release"],  
-            "regressor_method": "lasso"
+            "regressor_method": "linear"
         }),
         
 ]
