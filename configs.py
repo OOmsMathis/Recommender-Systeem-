@@ -12,12 +12,12 @@ class EvalConfig:
             "regressor_method": "lasso"
         }),
         ("content_lasso2", ContentBased, {
-            "features_methods": ["title_length","Year_of_release"],  
+            "features_methods": ["title_length"],  
             "regressor_method": "lasso"
         }),
-        ("content_ridge", ContentBased, {
-            "features_methods": ["title_length","Year_of_release"],  
-            "regressor_method": "ridge"
+        ("content_lasso3", ContentBased, {
+            "features_methods": ["Year_of_release"],  
+            "regressor_method": "lasso"
         }),
         
 ]
