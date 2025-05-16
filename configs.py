@@ -12,7 +12,7 @@ class EvalConfig:
             "regressor_method": "ridge"
         }),
         ("content_ridge1", ContentBased, {
-            "features_methods": [ "genome_tags","Genre_tfidf"],  
+            "features_methods": [ "genome_tags","Genre_binary"],  
             "regressor_method": "ridge"
         }),
          ("content_ridge2", ContentBased, {
