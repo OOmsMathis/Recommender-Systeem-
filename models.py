@@ -25,6 +25,8 @@ from sklearn.linear_model import Ridge, Lasso
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 
 
 def get_top_n(predictions, n):
@@ -115,6 +117,7 @@ class ContentBased(AlgoBase):
     def create_content_features(self, features_methods):
         """Content Analyzer"""
         df_items = load_items()
+        df_ratings = load_ratings()
         df_features = pd.DataFrame(index=df_items.index)
         if features_methods is None:
             df_features = pd.DataFrame(index=df_items.index)
@@ -190,6 +193,59 @@ class ContentBased(AlgoBase):
                 max_vote = df_tmdb['vote_average'].max()
                 df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
                 df_features = df_features.join(df_tmdb, how='left')
+            elif feature_method == "title_tfidf":
+                # Combine titles into a single string per item
+                df_items['title_string'] = df_items[C.LABEL_COL].fillna('')
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_items['title_string'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+                lemmatizer = WordNetLemmatizer()
+                stop_words = set(stopwords.words('english'))
+                # Preprocess titles: remove stopwords and apply lemmatization
+                df_items['title_string'] = df_items[C.LABEL_COL].fillna('').apply(lambda x: ' '.join(
+                        lemmatizer.lemmatize(word) for word in x.split() if word.lower() not in stop_words
+                    )
+                )
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_items['title_string'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+            elif feature_method == "genome_tags":
+                tags_path = C.CONTENT_PATH / "genome-tags.csv"
+                scores_path = C.CONTENT_PATH / "genome-scores.csv"
+                df_scores = pd.read_csv(scores_path)
+                df_tags = pd.read_csv(tags_path)
+                # Étape 2 : Merge pour récupérer les noms des tags
+                df_merged = df_scores.merge(df_tags, on='tagId')
+                # Étape 3 : Pivot → films × tags, valeurs = relevance
+                df_features = df_merged.pivot_table(index='movieId', columns='tag', values='relevance', fill_value=0)   
+            elif feature_method == "tfidf_relevance":
+                tags_path = C.CONTENT_PATH / "genome-tags.csv"
+                scores_path = C.CONTENT_PATH / "genome-scores.csv"
+                # Charger les données
+                df_tags = pd.read_csv(tags_path)
+                df_scores = pd.read_csv(scores_path)
+                # Fusionner pour obtenir les noms des tags
+                df_merged = df_scores.merge(df_tags, on='tagId')
+                # Grouper les tags pertinents par film en texte
+                df_merged['tag'] = df_merged['tag'].astype(str)
+                df_texts = df_merged.groupby('movieId')['tag'].apply(lambda x: ' '.join(x)).to_frame('tags')
+                # Appliquer TF-IDF
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_texts['tags'])
+                # Créer le DataFrame final de features
+                df_features = pd.DataFrame(tfidf_matrix.toarray(), index=df_texts.index, columns=tfidf.get_feature_names_out())
+
+            elif feature_method == "tmdb_cast":
+                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+                df_tmdb = pd.read_csv(tmdb_path)
+                df_tmdb = df_tmdb[['movieId', 'cast']].drop_duplicates('movieId')
+                df_tmdb['cast'] = df_tmdb['cast'].fillna('')
+                tfidf = TfidfVectorizer()
+                tfidf_matrix = tfidf.fit_transform(df_tmdb['cast'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb['movieId'], columns=tfidf.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+
             else:
                 raise NotImplementedError(f'Feature method {feature_method} not yet implemented')
         return df_features
@@ -281,4 +337,5 @@ class ContentBased(AlgoBase):
             
 
         return score
+
 

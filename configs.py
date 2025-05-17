@@ -5,10 +5,9 @@ from models import ContentBased
 
 class EvalConfig:  
     models = [
-        ("content_1", ContentBased, {
-            "features_method": "tmdb_vote_average",
-            "regressor_method": "ridge",
-        }),
+        ("content_ridge", ContentBased, {
+            "features_method": ["genome_tags", "Genre_binary"],
+            "regressor_method": "ridge"})
     ]
 
     split_metrics = ["mae","rmse"]
