@@ -13,7 +13,7 @@ def load_ratings(surprise_format=False):
         return data
     else:
         return df_ratings
-
+print(load_ratings())
 
 
 def load_items():
