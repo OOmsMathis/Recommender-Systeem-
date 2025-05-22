@@ -369,7 +369,7 @@ class ContentBased(AlgoBase):
 
     def fit(self, trainset):
         """Profile Learner"""
-        self.content_features = self.create_content_features(self.features_method)
+        self.content_features = self.create_content_features(self.features_methods)
         AlgoBase.fit(self, trainset)
         self.user_profile = {u: None for u in trainset.all_users()}
         for u in self.user_profile:
