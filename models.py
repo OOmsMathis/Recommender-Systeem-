@@ -5,8 +5,12 @@ from collections import defaultdict
 import numpy as np
 import random as rd
 import pandas as pd
+import nltk
+import heapq
+
 from surprise import AlgoBase
 from surprise import KNNWithMeans
+from surprise.prediction_algorithms.predictions import PredictionImpossible
 from surprise import SVD
 from sklearn.linear_model import LinearRegression
 from surprise import PredictionImpossible
@@ -28,6 +32,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+
+df_items = load_items()
+df_ratings = load_ratings()
 
 def get_top_n(predictions, n):
     """Return the top-N recommendation for each user from a set of predictions.
@@ -59,7 +69,7 @@ def get_top_n(predictions, n):
 
     return top_n
 
-""" 
+
 # First algorithm
 class ModelBaseline1(AlgoBase):
     def __init__(self):
@@ -95,29 +105,156 @@ class ModelBaseline3(AlgoBase):
 
     def estimate(self, u, i):
         return self.the_mean
-
+ 
 
 # Fourth Model
 class ModelBaseline4(SVD):
     def __init__(self,random_state = 1):
         SVD.__init__(self, n_factors=100)
 
- """
 
-#content_based
+class UserBased(AlgoBase):
+    def __init__(self, k=3, min_k=1, sim_options={}, **kwargs):
+        AlgoBase.__init__(self, sim_options=sim_options, **kwargs)
+        self.k = k
+        self.min_k = min_k
+
+        
+    def fit(self, trainset):
+        AlgoBase.fit(self, trainset)
+        
+        self.compute_rating_matrix()
+        
+        self.compute_similarity_matrix()
+        
+        self.mean_ratings = []
+        for u in range(self.trainset.n_users):
+            user_ratings = []
+            for (_, rating) in self.trainset.ur[u]: 
+                user_ratings.append(rating)
+            if user_ratings:
+                mean_rating = np.mean(user_ratings)
+            else:
+                mean_rating = float('nan')  
+            self.mean_ratings.append(mean_rating)
+
+    
+    def estimate(self, u, i):
+            if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+                raise np.nan 
+            
+            estimate = self.mean_ratings[u]
+
+            
+            neighbors = []
+            for (v, rating) in self.trainset.ir[i]:  
+                if v == u:
+                    continue  
+
+                sim_uv = self.sim[u, v] 
+
+                if sim_uv > 0 and not np.isnan(self.ratings_matrix[v, i]): 
+                    mean_v = self.mean_ratings[v]  
+                    neighbors.append((sim_uv, rating - mean_v))
+
+            
+            top_k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda x: x[0])
+
+            
+            actual_k = 0
+            weighted_sum = 0.0
+            sum_sim = 0.0
+
+            for sim, rating_diff in top_k_neighbors:
+                if actual_k == self.k:
+                    break
+                weighted_sum += sim * rating_diff
+                sum_sim += sim
+                actual_k += 1
+
+            # Check
+            if actual_k >= self.min_k and sum_sim > 0:
+                estimate += weighted_sum / sum_sim
+
+            return estimate
+
+
+                            
+    def compute_rating_matrix(self):
+        # -- implement here the compute_rating_matrix function --
+        self.ratings_matrix = np.empty((self.trainset.n_users, self.trainset.n_items))
+        self.ratings_matrix[:] = np.nan
+        for u in range(self.trainset.n_users): 
+            for i, rating in self.trainset.ur[u]:
+                self.ratings_matrix[u, i] = rating
+
+    
+    def compute_similarity_matrix(self):
+        m = self.trainset.n_users
+        ratings_matrix = self.ratings_matrix
+        min_support = self.sim_options.get('min_support', 1)
+        sim_name = self.sim_options.get("name", "msd") 
+
+        # Similarity matrix
+        self.sim = np.eye(m)
+
+        for i in range(m):
+            for j in range(i + 1, m):  
+                row_i = ratings_matrix[i]
+                row_j = ratings_matrix[j]
+
+                if sim_name == "jaccard":
+                    sim = self.jaccard_similarity(row_i, row_j)
+                    support = np.sum(~np.isnan(row_i) & ~np.isnan(row_j))
+                elif sim_name == "msd":
+                    diff = row_i - row_j
+                    support = np.sum(~np.isnan(diff))
+                    if support >= min_support:
+                        msd = np.nanmean((diff[~np.isnan(diff)]) ** 2)
+                        sim = 1 / (1 + msd)
+                    else:
+                        sim = 0
+                else:
+                    
+                    diff = row_i - row_j
+                    support = np.sum(~np.isnan(diff))
+                    if support >= min_support:
+                        msd = np.nanmean((diff[~np.isnan(diff)]) ** 2)
+                        sim = 1 / (1 + msd)
+                    else:
+                        sim = 0
+
+                if support >= min_support:
+                    self.sim[i, j] = sim
+                    self.sim[j, i] = sim
+
+    def jaccard_similarity(self, row_i, row_j):
+        
+        mask_i = ~np.isnan(row_i)
+        mask_j = ~np.isnan(row_j)
+
+        intersection = np.sum(mask_i & mask_j)
+        union = np.sum(mask_i | mask_j)
+
+        if union == 0:
+            return 0.0
+        return intersection / union
+
+
+
 class ContentBased(AlgoBase):
-    def __init__(self, features_method, regressor_method):
+    def __init__(self, features_methods, regressor_method): # Changé en pluriel
         AlgoBase.__init__(self)
-        self.features_method = features_method 
+        self.features_methods = features_methods  # Changé en pluriel
         self.regressor_method = regressor_method
-        self.content_features = self.create_content_features(features_method)
+        # Appel avec la variable d'instance (maintenant au pluriel)
+        self.content_features = self.create_content_features(self.features_methods)
 
         
 
     def create_content_features(self, features_methods):
         """Content Analyzer"""
         df_items = load_items()
-        df_ratings = load_ratings()
         df_features = pd.DataFrame(index=df_items.index)
         if features_methods is None:
             df_features = pd.DataFrame(index=df_items.index)
@@ -125,6 +262,7 @@ class ContentBased(AlgoBase):
             features_methods = [features_methods]
         
         for feature_method in features_methods:
+
             if feature_method == "title_length":
                 df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
                 df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
@@ -134,6 +272,7 @@ class ContentBased(AlgoBase):
                 title_length_max = df_title_length['title_length'].max()
                 df_title_length['title_length'] = (df_title_length['title_length'] - title_length_min) / (title_length_max - title_length_min)
                 df_features = pd.concat([df_features, df_title_length], axis=1)
+
             elif feature_method == "Year_of_release":
                 year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
                 df_year = year.to_frame(name='year_of_release')
@@ -143,6 +282,7 @@ class ContentBased(AlgoBase):
                 year_max = df_year['year_of_release'].max()
                 df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
                 df_features = pd.concat([df_features, df_year], axis=1)
+
             elif feature_method == "average_ratings":
                 average_rating = df_ratings.groupby('movieId')[C.RATING_COL].mean().rename('average_rating').to_frame()
                 global_avg = df_ratings[C.RATING_COL].mean()
@@ -151,6 +291,7 @@ class ContentBased(AlgoBase):
                 avg_rating_max = average_rating['average_rating'].max()
                 average_rating['average_rating'] = (average_rating['average_rating'] - avg_rating_min) / (avg_rating_max - avg_rating_min)
                 df_features = df_features.join(average_rating, how='left')
+
             elif feature_method == "count_ratings":
                 rating_count = df_ratings.groupby('movieId')[C.RATING_COL].size().rename('rating_count').to_frame()
                 rating_count['rating_count'] = rating_count['rating_count'].fillna(0).astype(int)
@@ -160,18 +301,21 @@ class ContentBased(AlgoBase):
                 rating_count_max = rating_count['rating_count'].max()
                 rating_count['rating_count'] = (rating_count['rating_count'] - rating_count_min) / (rating_count_max - rating_count_min)
                 df_features = df_features.join(rating_count, how='left')
+
             elif feature_method == "Genre_binary":
                 df_genre_list = df_items[C.GENRES_COL].str.split('|').explode().to_frame('genre_list')
                 df_dummies = pd.get_dummies(df_genre_list['genre_list'])
                 df_genres = df_dummies.groupby(df_genre_list.index).sum()
                 df_genres = df_genres.reindex(df_items.index).fillna(0).astype(int)
                 df_features = pd.concat([df_features, df_genres], axis=1)
+
             elif feature_method == "Genre_tfidf":
                 df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ')
                 tfidf = TfidfVectorizer()
                 tfidf_matrix = tfidf.fit_transform(df_items['genre_string'])
                 tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
                 df_features = pd.concat([df_features, tfidf_df], axis=1)
+
             elif feature_method == "Tags":
                 tags_path = str(C.CONTENT_PATH / "tags.csv")
                 df_tags = pd.read_csv(tags_path)
@@ -182,6 +326,7 @@ class ContentBased(AlgoBase):
                 tfidf_matrix = tfidf.fit_transform(df_tags_grouped['tags'])
                 tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf.get_feature_names_out())
                 df_features = pd.concat([df_features, tfidf_df], axis=1)
+
             elif feature_method == "tmdb_vote_average":
                 tmdb_path = str(C.CONTENT_PATH / "tmdb_full_features.csv")
                 df_tmdb = pd.read_csv(tmdb_path)
@@ -193,12 +338,16 @@ class ContentBased(AlgoBase):
                 max_vote = df_tmdb['vote_average'].max()
                 df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
                 df_features = df_features.join(df_tmdb, how='left')
+                    
             elif feature_method == "title_tfidf":
                 # Combine titles into a single string per item
                 df_items['title_string'] = df_items[C.LABEL_COL].fillna('')
                 tfidf = TfidfVectorizer()
                 tfidf_matrix = tfidf.fit_transform(df_items['title_string'])
                 tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+                nltk.download('stopwords')
+                nltk.download('wordnet')
+                nltk.download('omw-1.4')
                 lemmatizer = WordNetLemmatizer()
                 stop_words = set(stopwords.words('english'))
                 # Preprocess titles: remove stopwords and apply lemmatization
@@ -210,42 +359,9 @@ class ContentBased(AlgoBase):
                 tfidf_matrix = tfidf.fit_transform(df_items['title_string'])
                 tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
                 df_features = pd.concat([df_features, tfidf_df], axis=1)
-            elif feature_method == "genome_tags":
-                tags_path = C.CONTENT_PATH / "genome-tags.csv"
-                scores_path = C.CONTENT_PATH / "genome-scores.csv"
-                df_scores = pd.read_csv(scores_path)
-                df_tags = pd.read_csv(tags_path)
-                # Étape 2 : Merge pour récupérer les noms des tags
-                df_merged = df_scores.merge(df_tags, on='tagId')
-                # Étape 3 : Pivot → films × tags, valeurs = relevance
-                df_features = df_merged.pivot_table(index='movieId', columns='tag', values='relevance', fill_value=0)   
-            elif feature_method == "tfidf_relevance":
-                tags_path = C.CONTENT_PATH / "genome-tags.csv"
-                scores_path = C.CONTENT_PATH / "genome-scores.csv"
-                # Charger les données
-                df_tags = pd.read_csv(tags_path)
-                df_scores = pd.read_csv(scores_path)
-                # Fusionner pour obtenir les noms des tags
-                df_merged = df_scores.merge(df_tags, on='tagId')
-                # Grouper les tags pertinents par film en texte
-                df_merged['tag'] = df_merged['tag'].astype(str)
-                df_texts = df_merged.groupby('movieId')['tag'].apply(lambda x: ' '.join(x)).to_frame('tags')
-                # Appliquer TF-IDF
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(df_texts['tags'])
-                # Créer le DataFrame final de features
-                df_features = pd.DataFrame(tfidf_matrix.toarray(), index=df_texts.index, columns=tfidf.get_feature_names_out())
+            
 
-            elif feature_method == "tmdb_cast":
-                tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
-                df_tmdb = pd.read_csv(tmdb_path)
-                df_tmdb = df_tmdb[['movieId', 'cast']].drop_duplicates('movieId')
-                df_tmdb['cast'] = df_tmdb['cast'].fillna('')
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(df_tmdb['cast'])
-                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb['movieId'], columns=tfidf.get_feature_names_out())
-                df_features = pd.concat([df_features, tfidf_df], axis=1)
-
+            #attention, genomes_tags n'est pas ici car on a plus le fichier mais encore dispo dans content_based.ipynb
             else:
                 raise NotImplementedError(f'Feature method {feature_method} not yet implemented')
         return df_features
@@ -337,5 +453,3 @@ class ContentBased(AlgoBase):
             
 
         return score
-
-

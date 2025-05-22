@@ -14,7 +14,7 @@ def load_ratings(surprise_format=False):
     else:
         return df_ratings
 
-
+print(load_ratings())
 
 def load_items():
     df_items = pd.read_csv(C.CONTENT_PATH / C.ITEMS_FILENAME)

@@ -1,12 +1,13 @@
 # local imports
 from models import ContentBased
+from models import UserBased
 
 
 
 class EvalConfig:  
     models = [
         ("content_ridge", ContentBased, {
-            "features_method": ["genome_tags", "Genre_binary"],
+            "features_methods": ["Genre_binary"],
             "regressor_method": "ridge"})
     ]
 
