@@ -1,14 +1,12 @@
 # local imports
 from models import ContentBased
 from models import UserBased
-
-
+from models import *
 
 class EvalConfig:  
     models = [
-        ("content_ridge", ContentBased, {
-            "features_methods": ["Genre_binary"],
-            "regressor_method": "ridge"})
+        #("content_ridge", ContentBased, {"features_methods": ["Genre_binary"], "regressor_method": "ridge"}),
+        ("baseline4", ModelBaseline4, {})
     ]
 
     split_metrics = ["mae","rmse"]

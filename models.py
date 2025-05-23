@@ -105,12 +105,11 @@ class ModelBaseline3(AlgoBase):
 
     def estimate(self, u, i):
         return self.the_mean
- 
-
-# Fourth Model
+    
+# Fourth algorithm
 class ModelBaseline4(SVD):
-    def __init__(self,random_state = 1):
-        SVD.__init__(self, n_factors=100)
+    def __init__(self, random_state=1):
+        super().__init__(n_factors=100, random_state=random_state)
 
 
 class UserBased(AlgoBase):
@@ -141,7 +140,7 @@ class UserBased(AlgoBase):
     
     def estimate(self, u, i):
             if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
-                raise np.nan 
+                raise PredictionImpossible('User and/or item is unknown.') 
             
             estimate = self.mean_ratings[u]
 
