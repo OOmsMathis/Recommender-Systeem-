@@ -1,121 +1,179 @@
 import streamlit as st
 import pandas as pd
+from pathlib import Path
 
-# Vos modules
-import recommender # Le backend logique
-import content     # Pour les détails des films
-import constants as C # Pour PERSONAL_USER_ID notamment
+# Importer vos modules personnalisés
+import constants as C
+import content
+import recommender
 
-def display_recommendations_in_app(recommendations_data):
-    """Affiche les recommandations formatées dans Streamlit."""
-    st.subheader("🏆 Vos Films Recommandés")
-    if not recommendations_data:
-        st.info("Aucune recommandation n'a pu être générée pour le moment. " \
-                "Assurez-vous d'avoir exécuté `recommender_building.py` et que les modèles sont disponibles.")
-        return
+# --- Configuration de la Page Streamlit ---
+st.set_page_config(
+    page_title="Système de Recommandation de Films",
+    page_icon="🎬",
+    layout="wide"
+)
 
-    for i, (movie_id, score, explanation) in enumerate(recommendations_data):
-        movie_details = content.get_movie_details(movie_id) # Utilise content.py
-        if movie_details:
-            st.markdown(f"---") # Séparateur
-            cols = st.columns([1, 4]) # Colonne pour image/placeholder, colonne pour texte
-            
-            with cols[0]:
-                # Vous pourriez ajouter une image ici si vous avez les URLs des posters
-                st.markdown(f"### #{i+1}")
-
-            with cols[1]:
-                st.markdown(f"**{movie_details['title']}**")
-                st.caption(f"Genres: {movie_details['genres'].replace('|', ', ')}")
-                st.markdown(f"*Score estimé : {score:.2f}*")
-            
-            with st.expander("💡 Pourquoi ce film ?"):
-                st.markdown(explanation)
-        else:
-            st.warning(f"Détails non trouvés pour le film ID: {movie_id}")
-
-
-def main():
-    st.set_page_config(page_title="Recommandations de Films Perso", layout="wide", initial_sidebar_state="expanded")
-    st.title("🎬 Recommandations de Films Personnalisées")
-    st.markdown("Bienvenue ! Ce système utilise vos préférences implicites pour vous suggérer des films.")
-
-    # --- Sélection de l'utilisateur et du modèle dans la sidebar ---
-    st.sidebar.header("👤 Votre Profil")
-    # Pour ce projet, on se concentre sur l'utilisateur personnalisé
-    # La fonction get_available_user_ids_for_app() devrait retourner [str(C.Constant.PERSONAL_USER_ID)]
-    available_users = recommender.get_available_user_ids_for_app()
+# --- Chargement des Données Globales (mis en cache par Streamlit via content.py) ---
+@st.cache_data # Cache le résultat de cette fonction pour éviter de recharger inutilement
+def load_global_data():
+    """Charge les données globales nécessaires au fonctionnement de l'application."""
+    all_movie_features_df = content.get_all_movie_features()
+    if all_movie_features_df.empty:
+        st.error("Erreur critique: Impossible de charger les données des films depuis content.py.")
+        return None, []
+    all_movie_ids_list = all_movie_features_df.index.tolist()
     
-    if not available_users:
-        st.sidebar.error("Aucun profil utilisateur personnalisé n'a été trouvé. " \
-                         "Veuillez exécuter `recommender_building.py`.")
-        st.stop()
-
-    # Par défaut, on sélectionne le premier (et unique) utilisateur personnalisé
-    selected_user_id_str = st.sidebar.selectbox(
-        "Choisissez votre profil utilisateur:",
-        available_users,
-        index=0,
-        help="Ce profil a été enrichi avec votre bibliothèque de films personnels."
-    )
-    
-    # Convertir l'ID en entier si PERSONAL_USER_ID est un entier. Soyez cohérent.
+    # Charger les ratings pour les recommandations populaires une seule fois
+    ratings_df_for_popular = None
     try:
-        selected_user_id_for_model = int(selected_user_id_str)
-    except ValueError:
-        st.error("L'ID utilisateur sélectionné n'est pas valide.")
-        st.stop()
+        ratings_file_path = C.Constant.EVIDENCE_PATH / C.Constant.RATINGS_FILENAME
+        if ratings_file_path.exists():
+            ratings_df_for_popular = pd.read_csv(ratings_file_path)
+        else:
+            st.warning(f"Fichier de ratings {ratings_file_path} non trouvé. Les recommandations populaires pourraient ne pas fonctionner.")
+    except Exception as e:
+        st.warning(f"Erreur lors du chargement des ratings pour les recommandations populaires: {e}")
+        
+    return all_movie_features_df, all_movie_ids_list, ratings_df_for_popular
 
+ALL_MOVIE_FEATURES, ALL_MOVIE_IDS, RATINGS_DF_POPULAR = load_global_data()
 
-    st.sidebar.header("⚙️ Type de Recommandation")
-    model_type_display_names = {
-        "SVD": "Analyse Détaillée (SVD)",
-        "UserBased": "Selon Goûts Similaires (User-Based)",
-        "ContentBased": "Basé sur le Contenu (Content-Based)"
+# --- Définition des Profils Utilisateurs Personnalisés ---
+# Ce dictionnaire doit être mis à jour manuellement si vous ajoutez/modifiez des profils
+# avec recommender_building.py
+# La clé est le nom affiché, la valeur contient l'ID numérique et le suffixe du nom du modèle.
+PROFIL_UTILISATEURS_PERSONNALISES = {
+    "Alice (Profil Personnalisé)": {
+        "user_id": -1, # L'ID numérique utilisé dans recommender_building.py
+        "model_config_name_suffix": "svd_implicit" # Le suffixe du modèle
+    },
+    "Bob (Profil Personnalisé)": { # Exemple d'un autre profil
+        "user_id": -2,
+        "model_config_name_suffix": "nmf_implicit" # Assurez-vous que ce modèle existe
     }
-    # Clés techniques pour charger les modèles
-    model_technical_names = list(model_type_display_names.keys()) 
+    # Ajoutez d'autres profils ici si vous en avez créé
+}
+
+# --- Interface Utilisateur ---
+st.title("🎬 Système de Recommandation de Films")
+st.markdown("Découvrez votre prochain film coup de cœur !")
+
+# Options pour la sélection de l'utilisateur
+user_type_options = ["Recommandations Générales (Populaires)"] + \
+                    list(PROFIL_UTILISATEURS_PERSONNALISES.keys()) + \
+                    ["Utilisateur MovieLens (par ID)"]
+
+# Barre latérale pour les contrôles
+with st.sidebar:
+    st.header("⚙️ Vos Préférences")
     
-    selected_model_technical_name = st.sidebar.radio(
-        "Méthode de recommandation :",
-        options=model_technical_names,
-        format_func=lambda tech_name: model_type_display_names[tech_name], # Noms affichés à l'utilisateur
-        index=0
+    selected_user_type = st.selectbox(
+        "Choisissez votre type de profil :",
+        user_type_options,
+        index=0 # Par défaut sur "Recommandations Générales"
     )
 
-    num_recs = st.sidebar.slider("Nombre de films à recommander :", min_value=3, max_value=20, value=10, step=1)
+    target_user_id_input = None
+    user_name_for_profile_input = None
+    model_config_name_suffix_input = None
 
-    # --- Bouton pour obtenir les recommandations ---
-    if st.sidebar.button("🚀 Me Recommander des Films !", type="primary", use_container_width=True):
-        st.markdown("---")
-        with st.spinner(f"Recherche des pépites pour vous avec le modèle '{model_type_display_names[selected_model_technical_name]}' 🤔..."):
-            # Charger le modèle et le trainset associés à l'utilisateur et au type de modèle
-            loaded_model, loaded_trainset = recommender.load_model_and_trainset(
-                selected_user_id_for_model, 
-                selected_model_technical_name # Utiliser le nom technique
-            )
+    if selected_user_type == "Utilisateur MovieLens (par ID)":
+        # Max userId pour MovieLens small est 610
+        target_user_id_input = st.number_input(
+            "Entrez votre UserID MovieLens (1-610) :", 
+            min_value=1, 
+            max_value=610, # Ajustez si vous utilisez un autre dataset
+            value=1, 
+            step=1
+        )
+    elif selected_user_type in PROFIL_UTILISATEURS_PERSONNALISES:
+        profile_details = PROFIL_UTILISATEURS_PERSONNALISES[selected_user_type]
+        target_user_id_input = profile_details["user_id"]
+        user_name_for_profile_input = selected_user_type.split(" (")[0] # Extrait "Alice" de "Alice (Profil...)"
+        model_config_name_suffix_input = profile_details["model_config_name_suffix"]
+        st.caption(f"Profil sélectionné : {user_name_for_profile_input} (ID interne: {target_user_id_input})")
 
-            if loaded_model and loaded_trainset:
-                recommendations = recommender.get_top_n_recommendations(
-                    loaded_model,
-                    loaded_trainset,
-                    selected_user_id_for_model, # L'ID brut pour la prédiction (doit correspondre au type dans le trainset)
-                    selected_model_technical_name, # Le nom technique du modèle
-                    n=num_recs
-                )
-                display_recommendations_in_app(recommendations)
-            else:
-                st.error("Impossible de charger le modèle sélectionné. " \
-                         "Assurez-vous que `recommender_building.py` a été exécuté correctement.")
+    num_recommendations = st.slider(
+        "Nombre de recommandations souhaitées :", 
+        min_value=5, 
+        max_value=20, 
+        value=C.Constant.DEFAULT_N_RECOMMENDATIONS if hasattr(C.Constant, 'DEFAULT_N_RECOMMENDATIONS') else 10
+    )
+
+    recommend_button = st.button("Obtenir des Recommandations", type="primary", use_container_width=True)
+
+# --- Logique de Recommandation et Affichage ---
+if recommend_button and ALL_MOVIE_FEATURES is not None:
+    st.subheader("✨ Vos Recommandations Personnalisées ✨")
     
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(f"Profil actuel : **Utilisateur {selected_user_id_str}**")
-    st.sidebar.info("Ce projet utilise le dataset MovieLens et vos évaluations implicites.")
+    recommendations_ids = []
+    with st.spinner("Recherche de films pour vous... Merci de patienter !"):
+        if selected_user_type == "Recommandations Générales (Populaires)":
+            # La fonction get_popular_movies_recommendations retourne une liste de (id, titre)
+            # ou juste une liste d'IDs si all_movie_features_df n'est pas passé.
+            # Ici, on veut juste les IDs pour être cohérent, les détails seront récupérés ensuite.
+            raw_popular_recs = recommender.get_popular_movies_recommendations(
+                n=num_recommendations, 
+                ratings_df=RATINGS_DF_POPULAR # Utilise le DataFrame pré-chargé
+            )
+            if raw_popular_recs and isinstance(raw_popular_recs[0], tuple): # Si (id, titre)
+                recommendations_ids = [rec[0] for rec in raw_popular_recs]
+            else: # Si juste une liste d'IDs
+                recommendations_ids = raw_popular_recs
 
-if __name__ == '__main__':
-    # Étapes avant de lancer app.py :
-    # 1. Vérifiez/complétez constants.py avec les chemins nécessaires.
-    # 2. Créez votre fichier library_votrenom.csv.
-    # 3. Exécutez `python recommender_building.py` pour entraîner et sauvegarder vos modèles personnalisés.
-    # 4. Ensuite, lancez cette application avec `streamlit run app.py`.
-    main()
+        elif target_user_id_input is not None: # Cas profil personnalisé ou MovieLens ID
+            recommendations_ids = recommender.generate_recommendations_for_user(
+                user_id=target_user_id_input,
+                n=num_recommendations,
+                all_movie_ids=ALL_MOVIE_IDS,
+                user_name_for_profile=user_name_for_profile_input, # Sera None si MovieLens ID
+                model_config_name_suffix=model_config_name_suffix_input, # Sera None si MovieLens ID
+                ratings_df_path=C.Constant.EVIDENCE_PATH / C.Constant.RATINGS_FILENAME # Pour le trainset général si besoin
+            )
+        else:
+            st.warning("Veuillez sélectionner un type d'utilisateur ou un profil valide.")
+
+    if not recommendations_ids:
+        st.info("Nous n'avons pas pu générer de recommandations pour cette sélection. Essayez d'autres options !")
+    else:
+        st.success(f"Voici {len(recommendations_ids)} films qui pourraient vous plaire :")
+        
+        # Affichage en colonnes
+        num_cols = 3 # Nombre de films par ligne
+        cols = st.columns(num_cols)
+        for i, movie_id_rec in enumerate(recommendations_ids):
+            movie_details = content.get_movie_details(movie_id_rec, ALL_MOVIE_FEATURES)
+            if movie_details is not None:
+                col = cols[i % num_cols] # Répartit dans les colonnes
+                with col:
+                    st.markdown(f"##### {content.get_movie_title(movie_id_rec, ALL_MOVIE_FEATURES)}")
+                    
+                    poster_url = content.get_movie_poster_url(movie_id_rec, ALL_MOVIE_FEATURES)
+                    if poster_url:
+                        st.image(poster_url, use_column_width=True)
+                    else:
+                        # Placeholder si pas d'affiche
+                        st.image(f"https://placehold.co/300x450/222/fff?text={content.get_movie_title(movie_id_rec, ALL_MOVIE_FEATURES)}", use_column_width=True)
+
+                    genres = movie_details.get(C.Constant.GENRES_COL, "N/A")
+                    st.caption(f"Genres: {genres}")
+                    
+                    # Afficher d'autres détails si souhaité
+                    # overview = movie_details.get('overview', None) # Si 'overview' est dans vos features TMDB
+                    # if pd.notna(overview):
+                    #     with st.expander("Synopsis"):
+                    #         st.markdown(f"<small>{overview[:200]}...</small>", unsafe_allow_html=True)
+                    
+                    # Lien IMDB si disponible (tmdbId est plus direct pour TMDB)
+                    imdb_id = movie_details.get('imdbId', None)
+                    if pd.notna(imdb_id):
+                        st.markdown(f"<small>[Voir sur IMDB](https://www.imdb.com/title/tt{str(int(imdb_id)).zfill(7)}/)</small>", unsafe_allow_html=True)
+                    st.markdown("---") # Séparateur
+            else:
+                st.warning(f"Détails non trouvés pour le film ID: {movie_id_rec}")
+elif recommend_button and ALL_MOVIE_FEATURES is None:
+    st.error("Les données des films n'ont pas pu être chargées. Impossible de générer des recommandations.")
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("Projet MLSMM2156 - Système de Recommandation")
