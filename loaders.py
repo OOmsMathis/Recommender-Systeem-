@@ -21,22 +21,30 @@ def load_items():
     df_items = df_items.set_index(C.ITEM_ID_COL)
     return df_items
 
-def export_evaluation_report(df):
+def export_evaluation_report(df, features_used, regression_method):
     """
     Export the evaluation report to the specified evaluation directory in constants.
-    The file name is based on the current date to avoid overwriting previous experiments.
-    
+    Adds columns for used features and regression method.
+    Appends new evaluations to the existing file if it exists.
+
     Args:
         df (DataFrame): The DataFrame containing the evaluation report.
+        features_used (list or str): Features used in the evaluation.
+        regression_method (str): Regression method used.
     """
-    # Format the current date to create a unique file name
     today_str = datetime.now().strftime("%Y_%m_%d")
     filename = f"evaluation_report_{today_str}.csv"
-    
-    # Construct the full path where the file will be saved
     path = C.EVALUATION_PATH / filename
-    
-    # Export the DataFrame to CSV
-    df.to_csv(path, index=False)
+
+    # Add columns for features and regression method
+    df = df.copy()
+    df['features_used'] = ','.join(features_used) if isinstance(features_used, list) else str(features_used)
+    df['regression_method'] = regression_method
+
+    # If file exists, append without header; else, create new file with header
+    if path.exists():
+        df.to_csv(path, mode='a', header=False, index=False)
+    else:
+        df.to_csv(path, index=False)
     print(f"Evaluation report successfully exported to: {path}")
 

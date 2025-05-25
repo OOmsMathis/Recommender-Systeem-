@@ -242,63 +242,67 @@ class UserBased(AlgoBase):
 
 
 class ContentBased(AlgoBase):
-    def __init__(self, features_methods, regressor_method): # Changé en pluriel
+    def __init__(self, features_methods, regressor_method, precomputed_info=None):
         AlgoBase.__init__(self)
-        self.features_methods = features_methods  # Changé en pluriel
+        self.features_methods = features_methods
         self.regressor_method = regressor_method
-        # Appel avec la variable d'instance (maintenant au pluriel)
+        self.precomputed_info = precomputed_info # Stocke les informations précalculées
+
+        # Les features de contenu sont créées ici en utilisant les infos précalculées
         self.content_features = self.create_content_features(self.features_methods)
 
-        
-
     def create_content_features(self, features_methods):
-        """Content Analyzer"""
+        """Content Analyzer: Crée les features de contenu pour les items en utilisant
+        les informations précalculées pour la normalisation et les vectoriseurs TF-IDF."""
+        
         df_items = load_items()
+        df_ratings = load_ratings() # Nécessaire pour 'average_ratings' et 'count_ratings'
         df_features = pd.DataFrame(index=df_items.index)
+
         if features_methods is None:
-            df_features = pd.DataFrame(index=df_items.index)
+            return pd.DataFrame(index=df_items.index)
         if isinstance(features_methods, str):
             features_methods = [features_methods]
-        
-        for feature_method in features_methods:
 
+        # Charger les données TMDB une seule fois si des features TMDB sont requises
+        df_tmdb = None
+        if any(f.startswith('tmdb_') for f in features_methods):
+            tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+            df_tmdb = pd.read_csv(tmdb_path).drop_duplicates('movieId').set_index('movieId')
+            # Calculer le profit si nécessaire pour éviter des recalculs
+            if 'tmdb_profit' in features_methods:
+                df_tmdb['profit'] = df_tmdb['revenue'] - df_tmdb['budget']
+
+        for feature_method in features_methods:
             if feature_method == "title_length":
+                stats = self.precomputed_info['feature_stats']['title_length']
                 df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
                 df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
-                mean_title_length = int(df_title_length['title_length'].replace(0, np.nan).mean())
-                df_title_length.loc[df_title_length['title_length'] == 0, 'title_length'] = mean_title_length
-                title_length_min = df_title_length['title_length'].min()
-                title_length_max = df_title_length['title_length'].max()
-                df_title_length['title_length'] = (df_title_length['title_length'] - title_length_min) / (title_length_max - title_length_min)
+                df_title_length.loc[df_title_length['title_length'] == 0, 'title_length'] = stats['mean_fillna']
+                df_title_length['title_length'] = (df_title_length['title_length'] - stats['min']) / (stats['max'] - stats['min'])
                 df_features = pd.concat([df_features, df_title_length], axis=1)
 
             elif feature_method == "Year_of_release":
+                stats = self.precomputed_info['feature_stats']['year_of_release']
                 year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
                 df_year = year.to_frame(name='year_of_release')
-                mean_year = df_year.replace(0, np.nan).mean().iloc[0]
-                df_year['year_of_release'] = df_year['year_of_release'].fillna(mean_year).astype(int)
-                year_min = df_year['year_of_release'].min()
-                year_max = df_year['year_of_release'].max()
-                df_year['year_of_release'] = (df_year['year_of_release'] - year_min) / (year_max - year_min)
+                df_year['year_of_release'] = df_year['year_of_release'].fillna(stats['mean_fillna']).astype(int)
+                df_year['year_of_release'] = (df_year['year_of_release'] - stats['min']) / (stats['max'] - stats['min'])
                 df_features = pd.concat([df_features, df_year], axis=1)
 
             elif feature_method == "average_ratings":
+                stats = self.precomputed_info['feature_stats']['average_rating']
                 average_rating = df_ratings.groupby('movieId')[C.RATING_COL].mean().rename('average_rating').to_frame()
-                global_avg = df_ratings[C.RATING_COL].mean()
-                average_rating['average_rating'] = average_rating['average_rating'].fillna(global_avg)
-                avg_rating_min = average_rating['average_rating'].min()
-                avg_rating_max = average_rating['average_rating'].max()
-                average_rating['average_rating'] = (average_rating['average_rating'] - avg_rating_min) / (avg_rating_max - avg_rating_min)
+                average_rating['average_rating'] = average_rating['average_rating'].fillna(stats['mean_fillna'])
+                average_rating['average_rating'] = (average_rating['average_rating'] - stats['min']) / (stats['max'] - stats['min'])
                 df_features = df_features.join(average_rating, how='left')
 
             elif feature_method == "count_ratings":
+                stats = self.precomputed_info['feature_stats']['count_ratings']
                 rating_count = df_ratings.groupby('movieId')[C.RATING_COL].size().rename('rating_count').to_frame()
                 rating_count['rating_count'] = rating_count['rating_count'].fillna(0).astype(int)
-                mean_rating_count = int(rating_count['rating_count'].replace(0, np.nan).mean())
-                rating_count.loc[rating_count['rating_count'] == 0, 'rating_count'] = mean_rating_count
-                rating_count_min = rating_count['rating_count'].min()
-                rating_count_max = rating_count['rating_count'].max()
-                rating_count['rating_count'] = (rating_count['rating_count'] - rating_count_min) / (rating_count_max - rating_count_min)
+                rating_count.loc[rating_count['rating_count'] == 0, 'rating_count'] = stats['mean_fillna']
+                rating_count['rating_count'] = (rating_count['rating_count'] - stats['min']) / (stats['max'] - stats['min'])
                 df_features = df_features.join(rating_count, how='left')
 
             elif feature_method == "Genre_binary":
@@ -309,93 +313,187 @@ class ContentBased(AlgoBase):
                 df_features = pd.concat([df_features, df_genres], axis=1)
 
             elif feature_method == "Genre_tfidf":
-                df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ')
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(df_items['genre_string'])
-                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+                tfidf_vectorizer = self.precomputed_info['tfidf_vectorizers']['Genre_tfidf']
+                df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ', regex=False)
+                tfidf_matrix = tfidf_vectorizer.transform(df_items['genre_string']) # Utilise transform sur le vectoriseur pré-entraîné
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf_vectorizer.get_feature_names_out())
                 df_features = pd.concat([df_features, tfidf_df], axis=1)
 
             elif feature_method == "Tags":
-                tags_path = str(C.CONTENT_PATH / "tags.csv")
-                df_tags = pd.read_csv(tags_path)
-                df_tags = df_tags.dropna(subset=['tag'])
-                df_tags['tag'] = df_tags['tag'].astype(str)
-                df_tags_grouped = df_tags.groupby('movieId')['tag'].agg(' '.join).to_frame('tags')
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(df_tags_grouped['tags'])
-                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf.get_feature_names_out())
+                tfidf_vectorizer = self.precomputed_info['tfidf_vectorizers']['Tags']
+                tags_path = C.CONTENT_PATH / "tags.csv"
+                df_tags_local = pd.read_csv(tags_path) # Charger localement car groupby sur MovieId
+                df_tags_local = df_tags_local.dropna(subset=['tag'])
+                df_tags_local['tag'] = df_tags_local['tag'].astype(str)
+                df_tags_grouped = df_tags_local.groupby('movieId')['tag'].agg(' '.join).to_frame('tags')
+                tfidf_matrix = tfidf_vectorizer.transform(df_tags_grouped['tags'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf_vectorizer.get_feature_names_out())
+                # Reindexer pour correspondre aux items, car tous les films n'ont pas de tags
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
                 df_features = pd.concat([df_features, tfidf_df], axis=1)
 
             elif feature_method == "tmdb_vote_average":
-                tmdb_path = str(C.CONTENT_PATH / "tmdb_full_features.csv")
-                df_tmdb = pd.read_csv(tmdb_path)
-                df_tmdb = df_tmdb[['movieId', 'vote_average']].drop_duplicates('movieId')
-                df_tmdb = df_tmdb.set_index('movieId')
-                mean_vote = df_tmdb['vote_average'].mean()
-                df_tmdb['vote_average'] = df_tmdb['vote_average'].fillna(mean_vote)
-                min_vote = df_tmdb['vote_average'].min()
-                max_vote = df_tmdb['vote_average'].max()
-                df_tmdb['vote_average'] = (df_tmdb['vote_average'] - min_vote) / (max_vote - min_vote)
-                df_features = df_features.join(df_tmdb, how='left')
-                    
+                stats = self.precomputed_info['feature_stats']['tmdb_vote_average']
+                df_tmdb_col = df_tmdb[['vote_average']].copy() # Utilise le df_tmdb déjà chargé
+                df_tmdb_col['vote_average'] = df_tmdb_col['vote_average'].fillna(stats['mean_fillna'])
+                df_tmdb_col['vote_average'] = (df_tmdb_col['vote_average'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+
             elif feature_method == "title_tfidf":
-                # Combine titles into a single string per item
-                df_items['title_string'] = df_items[C.LABEL_COL].fillna('')
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(df_items['title_string'])
-                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
-                nltk.download('stopwords')
-                nltk.download('wordnet')
-                nltk.download('omw-1.4')
+                tfidf_vectorizer = self.precomputed_info['tfidf_vectorizers']['title_tfidf']
                 lemmatizer = WordNetLemmatizer()
                 stop_words = set(stopwords.words('english'))
-                # Preprocess titles: remove stopwords and apply lemmatization
-                df_items['title_string'] = df_items[C.LABEL_COL].fillna('').apply(lambda x: ' '.join(
-                        lemmatizer.lemmatize(word) for word in x.split() if word.lower() not in stop_words
-                    )
-                )
-                tfidf = TfidfVectorizer()
-                tfidf_matrix = tfidf.fit_transform(df_items['title_string'])
-                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf.get_feature_names_out())
+                # Appliquer le même prétraitement que lors du précalcul
+                df_items['title_string_processed'] = df_items[C.LABEL_COL].fillna('').apply(lambda x: ' '.join(
+                                lemmatizer.lemmatize(word) for word in x.split() if word.lower() not in stop_words
+                            ))
+                tfidf_matrix = tfidf_vectorizer.transform(df_items['title_string_processed'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf_vectorizer.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+
+            elif feature_method == "genome_tags":
+                # Pour genome_tags, l'approche est différente (pivot_table).
+                # Il est plus simple de recréer le df de features pour cette méthode spécifique.
+                # Alternativement, précalculer le df_features complet pour "genome_tags"
+                # et le stocker si l'impact performance est majeur.
+                genome_tags_path = C.CONTENT_PATH / "genome-tags.csv"
+                genome_scores_path = C.CONTENT_PATH / "genome-scores.csv"
+                df_scores = pd.read_csv(genome_scores_path)
+                df_tags_g = pd.read_csv(genome_tags_path)
+                df_merged_g = df_scores.merge(df_tags_g, on='tagId')
+                df_genome_features = df_merged_g.pivot_table(index='movieId', columns='tag', values='relevance', fill_value=0)
+                # S'assurer que l'index correspond
+                df_genome_features = df_genome_features.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, df_genome_features], axis=1)
+            
+            elif feature_method == "tfidf_relevance":
+                tfidf_vectorizer = self.precomputed_info['tfidf_vectorizers']['tfidf_relevance']
+                # Recharger et préparer les données comme lors du précalcul
+                genome_tags_path = C.CONTENT_PATH / "genome-tags.csv"
+                genome_scores_path = C.CONTENT_PATH / "genome-scores.csv"
+                df_tags_g = pd.read_csv(genome_tags_path)
+                df_scores_g = pd.read_csv(genome_scores_path)
+                df_merged_g = df_scores_g.merge(df_tags_g, on='tagId')
+                df_merged_g['tag'] = df_merged_g['tag'].astype(str)
+                df_texts = df_merged_g.groupby('movieId')['tag'].apply(lambda x: ' '.join(x)).to_frame('tags')
+                
+                tfidf_matrix = tfidf_vectorizer.transform(df_texts['tags'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_texts.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0) # S'assurer que tous les items sont inclus
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+
+            elif feature_method == "tmdb_popularity":
+                stats = self.precomputed_info['feature_stats']['tmdb_popularity']
+                df_tmdb_col = df_tmdb[['popularity']].copy()
+                df_tmdb_col['popularity'] = df_tmdb_col['popularity'].fillna(stats['mean_fillna'])
+                df_tmdb_col['popularity'] = (df_tmdb_col['popularity'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+
+            elif feature_method == "tmdb_budget":
+                stats = self.precomputed_info['feature_stats']['tmdb_budget']
+                df_tmdb_col = df_tmdb[['budget']].copy()
+                df_tmdb_col['budget'] = df_tmdb_col['budget'].fillna(stats['mean_fillna'])
+                df_tmdb_col['budget'] = (df_tmdb_col['budget'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+            
+            elif feature_method == "tmdb_revenue":
+                stats = self.precomputed_info['feature_stats']['tmdb_revenue']
+                df_tmdb_col = df_tmdb[['revenue']].copy()
+                df_tmdb_col['revenue'] = df_tmdb_col['revenue'].fillna(stats['mean_fillna'])
+                df_tmdb_col['revenue'] = (df_tmdb_col['revenue'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+
+            elif feature_method == "tmdb_profit":
+                stats = self.precomputed_info['feature_stats']['tmdb_profit']
+                df_tmdb_col = df_tmdb[['profit']].copy() # 'profit' est déjà calculé dans df_tmdb si nécessaire
+                df_tmdb_col['profit'] = df_tmdb_col['profit'].fillna(stats['mean_fillna'])
+                df_tmdb_col['profit'] = (df_tmdb_col['profit'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+            
+            elif feature_method == "tmdb_runtime":
+                stats = self.precomputed_info['feature_stats']['tmdb_runtime']
+                df_tmdb_col = df_tmdb[['runtime']].copy()
+                df_tmdb_col['runtime'] = df_tmdb_col['runtime'].fillna(stats['mean_fillna'])
+                df_tmdb_col['runtime'] = (df_tmdb_col['runtime'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+            
+            elif feature_method == "tmdb_vote_count":
+                stats = self.precomputed_info['feature_stats']['tmdb_vote_count']
+                df_tmdb_col = df_tmdb[['vote_count']].copy()
+                df_tmdb_col['vote_count'] = df_tmdb_col['vote_count'].fillna(stats['mean_fillna'])
+                df_tmdb_col['vote_count'] = (df_tmdb_col['vote_count'] - stats['min']) / (stats['max'] - stats['min'])
+                df_features = df_features.join(df_tmdb_col, how='left')
+            
+            elif feature_method == "tmdb_cast":
+                tfidf_vectorizer = self.precomputed_info['tfidf_vectorizers']['tmdb_cast']
+                df_tmdb_col = df_tmdb[['cast']].copy()
+                df_tmdb_col['cast'] = df_tmdb_col['cast'].fillna('') # Remplir les NaN pour TF-IDF
+                tfidf_matrix = tfidf_vectorizer.transform(df_tmdb_col['cast'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb_col.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
                 df_features = pd.concat([df_features, tfidf_df], axis=1)
             
+            elif feature_method == "tmdb_director":
+                tfidf_vectorizer = self.precomputed_info['tfidf_vectorizers']['tmdb_director']
+                df_tmdb_col = df_tmdb[['director']].copy()
+                df_tmdb_col['director'] = df_tmdb_col['director'].fillna('') # Remplir les NaN pour TF-IDF
+                tfidf_matrix = tfidf_vectorizer.transform(df_tmdb_col['director'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb_col.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
 
-            #attention, genomes_tags n'est pas ici car on a plus le fichier mais encore dispo dans content_based.ipynb
+            elif feature_method == "tmdb_original_language":
+                cols_to_use = self.precomputed_info['one_hot_columns']['tmdb_original_language']
+                df_tmdb_col = df_tmdb[['original_language']].copy()
+                df_tmdb_col['original_language'] = df_tmdb_col['original_language'].fillna('unknown')
+                df_lang_dummies = pd.get_dummies(df_tmdb_col['original_language'], prefix='lang')
+                # S'assurer que toutes les colonnes attendues sont présentes et dans le bon ordre
+                df_lang_dummies = df_lang_dummies.reindex(columns=cols_to_use, fill_value=0)
+                df_lang_dummies = df_lang_dummies.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, df_lang_dummies], axis=1)
+
             else:
-                raise NotImplementedError(f'Feature method {feature_method} not yet implemented')
+                raise NotImplementedError(f'Feature method {feature_method} not yet implemented or misconfigured.')
+
+        # Remplir les NaN résiduels dans df_features avec 0 ou une valeur appropriée
+        # (ex: pour les films n'ayant pas de tags si la méthode Tags est utilisée sans reindexation correcte)
+        df_features = df_features.fillna(0) # Une approche simple, à adapter si 0 n'est pas la meilleure imputation
+
         return df_features
-    
 
     def fit(self, trainset):
-        """Profile Learner"""
-        self.content_features = self.create_content_features(self.features_methods)
+        """Profile Learner - Utilise les features de contenu déjà précalculées."""
         AlgoBase.fit(self, trainset)
+        
+        # Le self.content_features est déjà prêt depuis __init__
+        # Assurez-vous qu'il est indexé par raw_item_id (movieId)
+        
         self.user_profile = {u: None for u in trainset.all_users()}
         for u in self.user_profile:
             user_items = trainset.ur[u]
             if len(user_items) > 0:
-                # Sépare les item_ids internes et les notes
                 user_ratings = self.trainset.ur[u]
                 df_user = pd.DataFrame(user_ratings, columns=['inner_item_id', 'user_ratings'])
-                # Conversion des item_id internes (Surprise) en item_id "raw" (MovieLens)
                 df_user["item_id"] = df_user["inner_item_id"].map(self.trainset.to_raw_iid)
-                # Fusion avec les features de contenu (sur l'index = item_id raw)
+                
+                # Joindre avec les features de contenu déjà disponibles
+                # Assurez-vous que df_user['item_id'] correspond à l'index de self.content_features
                 df_user = df_user.merge(self.content_features, how='left', left_on='item_id', right_index=True)
+                
                 # Préparation des features et des cibles pour l'entraînement
                 feature_names = list(self.content_features.columns)
                 X = df_user[feature_names].values
                 y = df_user['user_ratings'].values
-                # Gère les NaNs dans les features
-                X = np.nan_to_num(X)
+                X = np.nan_to_num(X) # Gère les NaNs si des items n'avaient pas toutes les features
 
-     
-                if self.regressor_method == 'linear': # Use linear regression
+                # Choix du régresseur
+                if self.regressor_method == 'linear':
                     model = LinearRegression(fit_intercept=True)
                 elif self.regressor_method == 'lasso':
                     model = Lasso(alpha=0.1)
                 elif self.regressor_method == 'random_forest':
                     model = RandomForestRegressor(n_estimators=10, max_depth=10, random_state=42)
-                elif self.regressor_method== 'neural_network':
+                elif self.regressor_method == 'neural_network':
                     model = MLPRegressor(hidden_layer_sizes=(60, 60), max_iter=2500, learning_rate_init=0.01, alpha=0.0001, random_state=42)
                 elif self.regressor_method == 'decision_tree':
                     model = DecisionTreeRegressor(max_depth=10, random_state=42)
@@ -403,52 +501,44 @@ class ContentBased(AlgoBase):
                     model = Ridge(alpha=1.0)
                 elif self.regressor_method == 'gradient_boosting':
                     model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
-                elif  self.regressor_method == 'knn':
+                elif self.regressor_method == 'knn':
                     model = KNeighborsRegressor(n_neighbors=5)
                 elif self.regressor_method == 'elastic_net':
                     model = ElasticNet(alpha=0.1, l1_ratio=0.5)
-
                 else:
-                    self.user_profile[u] = None
+                    self.user_profile[u] = None # Si la méthode du régresseur n'est pas reconnue
+                    continue # Passe à l'utilisateur suivant
                     
                 model.fit(X, y)
                 self.user_profile[u] = model
-
             else:
-             self.user_profile[u] = None
-             
+                self.user_profile[u] = None
         
+        return self
+
     def estimate(self, u, i):
-        """Scoring component used for item filtering"""
-        # First, handle cases for unknown users and items
+        """Scoring component used for item filtering."""
         if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
-            raise PredictionImpossible('User and/or item is unkown.')
+            raise PredictionImpossible('User and/or item is unknown.')
 
         if self.user_profile[u] is None:
             return self.trainset.global_mean
 
         raw_item_id = self.trainset.to_raw_iid(i)
+        
+        # S'assurer que les features de l'item existent
         if raw_item_id in self.content_features.index:
             item_features = self.content_features.loc[raw_item_id].values.reshape(1, -1)
+            item_features = np.nan_to_num(item_features) # Gérer les NaN au cas où
         else:
             return self.trainset.global_mean
-    
-        if self.regressor_method == 'linear':
-            score = self.user_profile[u].predict(item_features)[0]
-        elif self.regressor_method in [
-        'linear',
-        'lasso',
-        'random_forest',
-        'neural_network',
-        'decision_tree',
-        'ridge',
-        'gradient_boosting',
-        'knn',
-        'elastic_net' ]:
-          score = self.user_profile[u].predict(item_features)[0]
+        
+        # Prédiction avec le modèle du régresseur de l'utilisateur
+        score = self.user_profile[u].predict(item_features)[0]
 
-        else:
-            score=None
-            
+        # S'assurer que le score est dans les limites des ratings (e.g., entre 0.5 et 5)
+        # Ceci est une bonne pratique pour les modèles de régression
+        min_rating, max_rating = self.trainset.rating_scale
+        score = max(min_rating, min(max_rating, score))
 
         return score

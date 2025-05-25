@@ -84,9 +84,10 @@ def create_X(df):
 X, user_mapper, movie_mapper, user_inv_mapper, movie_inv_mapper = create_X(df_ratings)
 
 plt.figure(figsize=(8, 8))
-plt.spy(X[0:100, 0:100], markersize=1)
+plt.spy(X[0:671, 0:671], markersize=1)
 plt.title("Sparse Matrix (100 users x 100 movies)")
 plt.xlabel("Movies")
 plt.ylabel("Users")
 plt.show()
 print(f"Sparsity of the ratings matrix: {sparsity:.2%}")
+
