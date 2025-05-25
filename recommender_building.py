@@ -2,6 +2,7 @@ import pandas as pd
 import time
 from pathlib import Path
 from surprise import Dataset, Reader, dump, SVD # SVD est un exemple
+import pickle # <--- AJOUT IMPORTANT ICI
 
 # Votre module constants
 import constants as C 
@@ -37,12 +38,12 @@ def calculate_implicit_ratings_from_library(library_df, current_user_id):
         if row.get('on_wishlist', 0) == 1 and row.get('is_favorite', 0) == 0:
             rating += 0.25
 
-        # Borner le rating à l'échelle [0.5, 5.0] comme suggéré par Workshop 2 pour les ratings implicites
+        # Borner le rating à l'échelle [0.5, 5.0]
         rating = max(0.5, min(5.0, rating))
         
         implicit_ratings.append({
             C.Constant.USER_ID_COL: current_user_id,
-            C.Constant.MOVIE_ID_COL: int(row[C.Constant.MOVIE_ID_COL]), # Utilise MOVIE_ID_COL de constants.py
+            C.Constant.MOVIE_ID_COL: int(row[C.Constant.MOVIE_ID_COL]),
             C.Constant.RATING_COL: rating,
             C.Constant.TIMESTAMP_COL: int(time.time())
         })
@@ -55,7 +56,6 @@ def append_implicit_ratings_and_build_trainset(implicit_ratings_df, movielens_ra
     print(f"Nombre de ratings MovieLens originaux : {len(movielens_ratings_df)}")
     print(f"Nombre de ratings implicites ajoutés pour l'utilisateur {current_user_id} : {len(implicit_ratings_df)}")
     
-    # Utilisation des noms de colonnes définis dans constants.py
     cols_to_keep = [C.Constant.USER_ID_COL, C.Constant.MOVIE_ID_COL, C.Constant.RATING_COL, C.Constant.TIMESTAMP_COL]
     
     movielens_ratings_df = movielens_ratings_df[cols_to_keep].copy()
@@ -63,9 +63,8 @@ def append_implicit_ratings_and_build_trainset(implicit_ratings_df, movielens_ra
         raise ValueError(f"Les colonnes de implicit_ratings_df ne correspondent pas. Attendu: {cols_to_keep}, Obtenu: {implicit_ratings_df.columns.tolist()}")
     implicit_ratings_df = implicit_ratings_df[cols_to_keep].copy()
 
-    # Conversion types numériques
     for df_part in [movielens_ratings_df, implicit_ratings_df]:
-        for col in [C.Constant.USER_ID_COL, C.Constant.MOVIE_ID_COL]: # MOVIE_ID_COL ici
+        for col in [C.Constant.USER_ID_COL, C.Constant.MOVIE_ID_COL]:
             df_part[col] = pd.to_numeric(df_part[col])
         df_part[C.Constant.RATING_COL] = pd.to_numeric(df_part[C.Constant.RATING_COL], errors='coerce')
         df_part[C.Constant.TIMESTAMP_COL] = pd.to_numeric(df_part[C.Constant.TIMESTAMP_COL], errors='coerce').fillna(0).astype(int)
@@ -78,49 +77,61 @@ def append_implicit_ratings_and_build_trainset(implicit_ratings_df, movielens_ra
     else:
         print(f"Ratings pour USER_ID ({current_user_id}) trouvés et intégrés.")
 
-    # L'échelle de rating pour le Reader doit couvrir 0.5-5.0 pour les ratings implicites (Workshop 2)
-    # même si C.Constant.RATINGS_SCALE est (1,5) pour les ratings MovieLens originaux.
     reader = Reader(rating_scale=(0.5, 5.0))
     data = Dataset.load_from_df(augmented_ratings_df[[C.Constant.USER_ID_COL, C.Constant.MOVIE_ID_COL, C.Constant.RATING_COL]], reader)
     augmented_trainset = data.build_full_trainset() 
     
     print(f"Trainset augmenté construit avec {augmented_trainset.n_users} utilisateurs et {augmented_trainset.n_items} items.")
-    return augmented_trainset
+    return augmented_trainset # Retourner le trainset pour la sauvegarde
 
-def train_and_save_personalized_model(trainset, model_name_prefix, user_name_for_filename, model_type="SVD", model_config=None):
+def train_and_save_personalized_model(trainset_to_save, model_name_prefix, user_name_for_filename, model_type="SVD", model_config=None): # Renommé pour clarté
     """
-    Entraîne un modèle sur le trainset fourni et le sauvegarde.
-    Le nom du modèle contiendra le user_name_for_filename.
+    Entraîne un modèle sur le trainset fourni et le sauvegarde, ainsi que le trainset.
     """
-    # Pour l'affichage, essayons de trouver l'ID numérique interne si possible.
-    # Cela suppose que l'ID numérique est le dernier ajouté ou qu'il est connu.
-    # Si `user_name_for_filename` est l'ID numérique, cela fonctionnera. Sinon, c'est juste pour l'affichage.
-    try:
-        internal_user_id_display = trainset.to_raw_uid(trainset.n_users -1) # Hypothèse: dernier utilisateur ajouté
-    except: # Au cas où l'ID n'est pas directement le dernier ou n'est pas un int.
-        internal_user_id_display = user_name_for_filename
-
-    print(f"Entraînement du modèle {model_type} pour le profil '{user_name_for_filename}' (ID interne approx.: {internal_user_id_display})...")
+    # L'ID utilisateur numérique est déjà dans le trainset, on utilise user_name_for_filename pour les noms de fichiers.
+    # Pour l'affichage, on peut essayer de récupérer l'ID interne si le trainset est déjà construit.
+    # Ici, trainset_to_save est l'objet trainset complet.
+    
+    # Tentative d'affichage d'un ID interne (peut être complexe si l'ID n'est pas le dernier ajouté)
+    # Pour simplifier, on se fie au user_name_for_filename pour l'identification du profil.
+    print(f"Entraînement du modèle {model_type} pour le profil '{user_name_for_filename}'...")
     
     if model_type == "SVD":
         algo = SVD(**(model_config if model_config else {}))
-    # elif model_type == "MonModeleCustom":
-    #     algo = models.MonModeleCustomWrapper(**(model_config if model_config else {}))
     else:
         raise ValueError(f"Type de modèle inconnu : {model_type}")
 
-    algo.fit(trainset)
+    algo.fit(trainset_to_save) # Entraîner sur le trainset passé en argument
     
+    # Sauvegarde du modèle
     model_filename = C.Constant.MODEL_STORAGE_FILE_TEMPLATE_NAMED.format(user_name=user_name_for_filename, model_name=model_name_prefix)
     model_path = C.Constant.MODELS_STORAGE_PATH / model_filename
-    
     print(f"Sauvegarde du modèle entraîné sous : {model_path}")
     dump.dump(str(model_path), algo=algo, verbose=1)
     
+    # Sauvegarde du trainset
     trainset_filename = C.Constant.TRAINSET_STORAGE_FILE_TEMPLATE_NAMED.format(user_name=user_name_for_filename)
     trainset_path = C.Constant.MODELS_STORAGE_PATH / trainset_filename
-    print(f"Sauvegarde du trainset augmenté sous : {trainset_path}")
-    dump.dump(str(trainset_path), trainset=trainset, verbose=1)
+    
+    try:
+        print(f"Sauvegarde du trainset augmenté sous : {trainset_path}")
+        # Utiliser la variable correcte du trainset ici (celle passée à la fonction)
+        dump.dump(file_name=str(trainset_path), trainset=trainset_to_save, verbose=1)
+        print(f"Trainset pour {user_name_for_filename} sauvegardé avec surprise.dump.")
+    except TypeError as te:
+        if "unexpected keyword argument 'trainset'" in str(te) or "dump() got an unexpected keyword argument 'trainset'" in str(te): # Gérer les deux messages d'erreur possibles
+            print(f"AVERTISSEMENT: surprise.dump a échoué pour le trainset de {user_name_for_filename}. Tentative avec pickle.")
+            try:
+                with open(str(trainset_path), 'wb') as f_pickle:
+                    pickle.dump(trainset_to_save, f_pickle) # Utiliser la variable correcte
+                print(f"Trainset pour {user_name_for_filename} sauvegardé avec pickle.")
+            except Exception as pickle_e:
+                print(f"ERREUR lors de la sauvegarde du trainset pour {user_name_for_filename} avec pickle : {pickle_e}")
+        else:
+            print(f"ERREUR (TypeError) lors de la sauvegarde du trainset pour {user_name_for_filename} : {te}")
+    except Exception as e:
+        print(f"ERREUR générale lors de la sauvegarde du trainset pour {user_name_for_filename} : {e}")
+
 
 def main_recommender_building_for_user(user_name, 
                                        target_user_id, 
@@ -129,15 +140,15 @@ def main_recommender_building_for_user(user_name,
                                        model_config_params=None):
     """
     Fonction principale pour un utilisateur donné par son nom et son ID cible.
-    Le fichier de bibliothèque sera recherché en utilisant C.Constant.IMPLICIT_LIBRARY_FILENAME_TEMPLATE.
-    Les ratings MovieLens sont chargés en utilisant C.Constant.EVIDENCE_PATH et C.Constant.RATINGS_FILENAME.
     """
+    if not hasattr(C.Constant, 'IMPLICIT_LIBRARY_FILENAME_TEMPLATE'):
+        raise AttributeError("C.Constant.IMPLICIT_LIBRARY_FILENAME_TEMPLATE n'est pas défini dans constants.py")
+    
     personal_library_filename = C.Constant.IMPLICIT_LIBRARY_FILENAME_TEMPLATE.format(user_name=user_name)
     personal_library_file_path = C.Constant.IMPLICIT_LIBRARIES_PATH / personal_library_filename
     
     movielens_ratings_file_path = C.Constant.EVIDENCE_PATH / C.Constant.RATINGS_FILENAME
 
-    # 1. Charger la bibliothèque personnelle
     try:
         personal_library_df = pd.read_csv(personal_library_file_path)
         print(f"Bibliothèque personnelle pour '{user_name}' chargée depuis : {personal_library_file_path}")
@@ -148,7 +159,6 @@ def main_recommender_building_for_user(user_name,
         print(f"ERREUR lors du chargement de la bibliothèque pour '{user_name}' : {e}")
         return
 
-    # 2. Calculer les ratings implicites
     try:
         implicit_ratings_df = calculate_implicit_ratings_from_library(personal_library_df, target_user_id)
     except ValueError as e:
@@ -159,19 +169,12 @@ def main_recommender_building_for_user(user_name,
         return
     print(f"Ratings implicites calculés pour '{user_name}' (ID: {target_user_id}) :\n{implicit_ratings_df.head()}")
 
-    # 3. Charger les ratings MovieLens
     try:
         movielens_ratings_df = pd.read_csv(movielens_ratings_file_path)
-        # S'assurer que la colonne movie ID est bien nommée C.Constant.MOVIE_ID_COL ('movieId')
-        # Votre constants.py utilise ITEM_ID_COL = 'movieId' et plus loin MOVIE_ID_COL = 'movieId'.
-        # Je suppose que la colonne dans ratings.csv est bien 'movieId'.
-        if C.Constant.ITEM_ID_COL not in movielens_ratings_df.columns and C.Constant.MOVIE_ID_COL in movielens_ratings_df.columns:
-            pass # C'est bon si MOVIE_ID_COL ('movieId') est là
-        elif C.Constant.ITEM_ID_COL in movielens_ratings_df.columns and C.Constant.MOVIE_ID_COL != C.Constant.ITEM_ID_COL :
+        if C.Constant.ITEM_ID_COL in movielens_ratings_df.columns and C.Constant.MOVIE_ID_COL != C.Constant.ITEM_ID_COL :
              movielens_ratings_df.rename(columns={C.Constant.ITEM_ID_COL: C.Constant.MOVIE_ID_COL}, inplace=True)
         elif C.Constant.MOVIE_ID_COL not in movielens_ratings_df.columns:
-             raise ValueError(f"La colonne Movie ID ({C.Constant.MOVIE_ID_COL} ou {C.Constant.ITEM_ID_COL}) est introuvable dans {movielens_ratings_file_path}")
-
+             raise ValueError(f"La colonne Movie ID ({C.Constant.MOVIE_ID_COL}) est introuvable dans {movielens_ratings_file_path}")
         print(f"Ratings MovieLens chargés depuis : {movielens_ratings_file_path}")
     except FileNotFoundError:
         print(f"ERREUR : Fichier de ratings MovieLens non trouvé à : {movielens_ratings_file_path}")
@@ -180,12 +183,12 @@ def main_recommender_building_for_user(user_name,
         print(f"ERREUR lors du chargement des ratings MovieLens : {e}")
         return
 
-    # 4. Ajouter les ratings implicites et construire le trainset
+    # augmented_trainset est créé ici
     augmented_trainset = append_implicit_ratings_and_build_trainset(implicit_ratings_df, movielens_ratings_df, target_user_id)
 
-    # 5. Entraîner et sauvegarder le modèle personnalisé
+    # Passer augmented_trainset à la fonction de sauvegarde
     train_and_save_personalized_model(
-        trainset=augmented_trainset,
+        trainset_to_save=augmented_trainset, # Passer le trainset ici
         model_name_prefix=model_prefix_name,
         user_name_for_filename=user_name, 
         model_type=model_type,
@@ -196,35 +199,25 @@ def main_recommender_building_for_user(user_name,
     print(f"Les modèles et le trainset sont sauvegardés dans : {C.Constant.MODELS_STORAGE_PATH}")
 
 if __name__ == '__main__':
-    # --- CONFIGURATION POUR L'EXÉCUTION SPÉCIFIQUE D'UN PROFIL ---
-    USER_NAME_TO_BUILD = "testuser"  # Nom de la personne (utilisé pour library_testuser.csv et model_testuser_...)
-    USER_ID_FOR_DATASET = -1     # ID numérique unique pour cette personne dans le dataset Surprise
-    
+    USER_NAME_TO_BUILD = "testuser"
+    USER_ID_FOR_DATASET = -1     
     MODEL_TYPE_FOR_USER = "SVD" 
-    MODEL_PREFIX_FOR_FILENAME = "svd_implicit" # Ex: "model_alice_svd_implicit.pkl"
-    
+    MODEL_PREFIX_FOR_FILENAME = "svd_implicit"
     svd_config = {'n_factors': 50, 'n_epochs': 25, 'lr_all': 0.005, 'reg_all': 0.04, 'verbose': True}
     MODEL_PARAMS = svd_config 
 
-    # --- Vérification des constantes et des chemins ---
     try:
-        required_paths = [
-            C.Constant.IMPLICIT_LIBRARIES_PATH,
-            C.Constant.EVIDENCE_PATH,
-            C.Constant.MODELS_STORAGE_PATH
+        required_attrs = [
+            'IMPLICIT_LIBRARIES_PATH', 'IMPLICIT_LIBRARY_FILENAME_TEMPLATE',
+            'EVIDENCE_PATH', 'RATINGS_FILENAME', # Pour charger les ratings MovieLens
+            'MODELS_STORAGE_PATH', 
+            'MODEL_STORAGE_FILE_TEMPLATE_NAMED', 
+            'TRAINSET_STORAGE_FILE_TEMPLATE_NAMED',
+            'USER_ID_COL', 'MOVIE_ID_COL', 'RATING_COL', 'TIMESTAMP_COL'
         ]
-        for p in required_paths: 
-            if not isinstance(p, Path):
-                 raise AttributeError(f"La constante {p} devrait être un objet Path.")
-        
-        required_files_templates = [
-            'IMPLICIT_LIBRARY_FILENAME_TEMPLATE',
-            'MODEL_STORAGE_FILE_TEMPLATE_NAMED',
-            'TRAINSET_STORAGE_FILE_TEMPLATE_NAMED'
-        ]
-        for tmpl in required_files_templates:
-            if not hasattr(C.Constant, tmpl):
-                raise AttributeError(f"Constante de template manquante dans constants.py: {tmpl}. Veuillez l'ajouter comme suggéré.")
+        if not all(hasattr(C.Constant, attr) for attr in required_attrs):
+            missing = [attr for attr in required_attrs if not hasattr(C.Constant, attr)]
+            raise AttributeError(f"Constantes essentielles manquantes dans constants.py: {missing}")
 
         C.Constant.IMPLICIT_LIBRARIES_PATH.mkdir(parents=True, exist_ok=True)
         C.Constant.MODELS_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
@@ -243,7 +236,6 @@ if __name__ == '__main__':
         print(f"Une erreur inattendue est survenue lors de l'initialisation : {e}")
         exit()
 
-    # --- Lancement du processus de construction ---
     print(f"--- Lancement de Recommender Building pour l'utilisateur: {USER_NAME_TO_BUILD} (ID interne: {USER_ID_FOR_DATASET}) ---")
     
     main_recommender_building_for_user(
