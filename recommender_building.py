@@ -1,171 +1,128 @@
+# recommender_building.py
+
 import pandas as pd
+from surprise import Dataset, Reader, SVD
+from surprise import dump
 import time
-from surprise import Dataset, Reader, dump
+import os
 
-# Vos modules existants
-import constants as C
-import loaders
-import models # Assurez-vous que models.py est accessible et correct
+# --- Configuration ---
 
-# --- Configuration pour ce script ---
-# Assurez-vous que ces chemins et noms de colonnes sont corrects et définis dans constants.py
-# ou définissez-les ici si ce n'est pas le cas.
-# Exemple :
-# PERSONAL_LIBRARY_PATH = C.Constant.DATA_PATH.parent / "implicit_libraries" / "library_votrenom.csv"
-# MOVIELENS_RATINGS_PATH = C.Constant.EVIDENCE_PATH / C.Constant.RATINGS_FILENAME
-# MODELS_STORAGE_PATH = C.Constant.DATA_PATH.parent / "models_streamlit_recs" # Doit correspondre à ce que recommender.py utilise
-# MODELS_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
-# TRAINSET_STORAGE_FILE = MODELS_STORAGE_PATH / "augmented_trainset_user{}.pkl"
-# MODEL_STORAGE_FILE_TEMPLATE = MODELS_STORAGE_PATH / "user{}_{}_model.pkl"
+# Demande le nom de la personne au lancement du script
+PERSON_NAME = "maxime"
+USER_ID = 0 # Choisis un ID non utilisé par MovieLens 
 
+# Adapte ces chemins à ta structure de projet
+PATH_TO_MOVIELENS_RATINGS = 'data/small/evidence/ratings.csv' # Chemin vers tes ratings MovieLens
+PATH_TO_LIBRARY = f'library_{PERSON_NAME}.csv' # Chemin vers le fichier CSV personnel
+OUTPUT_MODEL_PATH = 'data/small/recs/'
+PERSONALIZED_MODEL_NAME = f'svd_{PERSON_NAME}_personalized.p'
+USER_ID = 0 # Choisis un ID non utilisé par MovieLens (0 ou -1 sont de bonnes options)
 
-# Votre ID utilisateur spécial pour la bibliothèque implicite
-# (doit être un ID non utilisé dans MovieLens) [cite: 19]
-PERSONAL_USER_ID = -1 # Ou max(userId) + 1, etc. [cite: 19, 20]
+# Assure-toi que le dossier de sortie existe
+os.makedirs(OUTPUT_MODEL_PATH, exist_ok=True)
 
-def calculate_implicit_ratings_from_library(library_df):
+def calculate_implicit_rating(row):
     """
-    Calcule les notes implicites à partir du DataFrame de la bibliothèque personnelle.
-    Basé sur la section 4.5.1 de "Practical Recommender Systems". [cite: 5, 17]
-    La note doit être dans l'échelle MovieLens [0.5, 5]. [cite: 17]
+    Calcule une note implicite basée sur les colonnes de la bibliothèque personnelle.
+    Échelle de 0.5 à 5.0.
+    C'est une formule d'exemple, tu DOIS l'adapter à ta logique !
     """
-    print("Calcul des notes implicites à partir de la bibliothèque...")
-    implicit_ratings = []
+    rating = 2.5 # Note de base neutre
 
-    # DÉFINISSEZ VOTRE LOGIQUE DE CALCUL ICI
-    # C'est la partie la plus subjective et personnelle.
-    # Exemple de structure (à adapter impérativement) :
-    # Colonnes attendues dans library_df : 'movieId', 'n_watched', 'wishlist', 'recent', 'top10'
-    # (celles que vous avez définies dans votre fichier CSV)
-    for _, row in library_df.iterrows():
-        movie_id = row['movieId']
-        # Exemple de calcul simple (À PERSONNALISER FORTEMENT)
-        score = 2.5 # Note de base
-        if 'n_watched' in row and pd.notna(row['n_watched']):
-            score += min(float(row['n_watched']), 5) * 0.2 # Max 1 pt pour n_watched
-        if 'wishlist' in row and pd.notna(row['wishlist']) and int(row['wishlist']) == 1:
-            score += 0.75
-        if 'recent' in row and pd.notna(row['recent']) and int(row['recent']) == 1:
-            score += 0.5
-        if 'top10' in row and pd.notna(row['top10']) and int(row['top10']) == 1:
-            score += 1.0
+    # Augmentation basée sur le nombre de visionnages
+    if row['times_watched'] >= 5:
+        rating += 1.5
+    elif row['times_watched'] >= 2:
+        rating += 1.0
+    elif row['times_watched'] >= 1:
+        rating += 0.5
 
-        # Assurer que le score est dans l'échelle [0.5, 5]
-        final_score = max(0.5, min(5.0, score))
-        implicit_ratings.append({
-            C.Constant.USER_ID_COL: PERSONAL_USER_ID,
-            C.Constant.ITEM_ID_COL: movie_id,
-            C.Constant.RATING_COL: final_score,
-            C.Constant.TIMESTAMP_COL: int(time.time()) # Timestamp actuel
-        })
-    
-    print(f"{len(implicit_ratings)} notes implicites calculées.")
-    return pd.DataFrame(implicit_ratings)
+    # Bonus pour les favoris
+    if row['is_favorite'] == 1:
+        rating += 1.0
 
-def augment_ratings_and_build_trainset(movielens_ratings_df, implicit_ratings_df):
+    # Bonus pour la récence
+    if row['recency_score'] >= 4: # Vu récemment ou très récemment
+        rating += 0.5
+    elif row['recency_score'] <= 2 and row['times_watched'] > 0 : # Vu il y a longtemps
+        rating -= 0.25
+
+
+    # Bonus si "plan to watch" et pas encore vu beaucoup
+    if row['plan_to_watch'] == 1 and row['times_watched'] <= 1:
+        rating = max(rating, 3.0) # Si planifié, au moins 3.0 s'il n'a pas été beaucoup vu et mal noté
+
+    # Plafonner la note entre 0.5 et 5.0
+    return max(0.5, min(5.0, rating))
+
+def build_and_save_personalized_model():
     """
-    Ajoute les notes implicites au dataset MovieLens et construit un trainset Surprise. [cite: 18]
+    Fonction principale pour lire la bibliothèque, l'ajouter aux ratings,
+    entraîner un modèle et le sauvegarder.
     """
-    print("Augmentation du dataset MovieLens avec les notes implicites...")
-    augmented_ratings_df = pd.concat([movielens_ratings_df, implicit_ratings_df], ignore_index=True)
-    
-    reader = Reader(rating_scale=C.Constant.RATINGS_SCALE)
-    data = Dataset.load_from_df(
-        augmented_ratings_df[[C.Constant.USER_ID_COL, C.Constant.ITEM_ID_COL, C.Constant.RATING_COL]],
-        reader
-    )
-    full_trainset = data.build_full_trainset()
-    print("Trainset Surprise augmenté créé.")
-    return full_trainset, augmented_ratings_df
-
-def train_and_save_model(trainset, model_type, model_config, user_id_for_filename):
-    """
-    Entraîne un modèle sur le trainset et le sauvegarde. [cite: 21]
-    """
-    print(f"Entraînement du modèle {model_type} pour l'utilisateur {user_id_for_filename}...")
-    
-    if model_type == 'SVD':
-        model = models.ModelBaseline4(**model_config) # Assurez-vous que ModelBaseline4 accepte les kwargs
-    elif model_type == 'UserBased':
-        model = models.UserBased(**model_config)
-    elif model_type == 'ContentBased':
-        # ContentBased a une initialisation différente, il prend features_methods et regressor_method
-        model = models.ContentBased(
-            features_methods=model_config.get('features_methods'),
-            regressor_method=model_config.get('regressor_method')
-        )
-    else:
-        raise ValueError(f"Type de modèle inconnu: {model_type}")
-
-    model.fit(trainset)
-    
-    # Sauvegarde du modèle
-    model_filename = C.Constant.MODEL_STORAGE_FILE_TEMPLATE.format(user_id_for_filename, model_type.lower())
-    print(f"Sauvegarde du modèle dans {model_filename}...")
-    dump.dump(str(model_filename), algo=model, verbose=1) # Utiliser surprise.dump [cite: 21, 22]
-
-    # Sauvegarde du trainset associé (important pour les IDs internes de Surprise)
-    trainset_filename = C.Constant.TRAINSET_STORAGE_FILE.format(user_id_for_filename)
-    with open(trainset_filename, 'wb') as f:
-        pickle.dump(trainset, f)
-    print(f"Trainset associé sauvegardé dans {trainset_filename}")
-
-
-def main():
-    # 1. Charger la bibliothèque personnelle
+    # 1. Lire la bibliothèque personnelle et calculer les notes implicites
     try:
-        personal_library_df = pd.read_csv(C.Constant.PERSONAL_LIBRARY_PATH)
-        # Assurez-vous que les colonnes movieId, et vos colonnes d'événements (n_watched, etc.) sont présentes.
-        # Exemple : Vérifier si 'movieId' est présent
-        if C.Constant.ITEM_ID_COL not in personal_library_df.columns:
-            raise ValueError(f"La colonne '{C.Constant.ITEM_ID_COL}' est manquante dans la bibliothèque personnelle.")
-
+        df_library = pd.read_csv(PATH_TO_LIBRARY)
     except FileNotFoundError:
-        print(f"ERREUR: Fichier de bibliothèque personnelle non trouvé à {C.Constant.PERSONAL_LIBRARY_PATH}")
-        print("Veuillez créer votre fichier library_votrenom.csv et le placer correctement.")
-        return
-    except ValueError as e:
-        print(f"ERREUR dans le fichier de bibliothèque personnelle : {e}")
+        print(f"ERREUR: Le fichier '{PATH_TO_LIBRARY}' n'a pas été trouvé. Crée-le d'abord.")
         return
 
-    # 2. Calculer les notes implicites
-    implicit_ratings_df = calculate_implicit_ratings_from_library(personal_library_df)
+    if not all(col in df_library.columns for col in ['movieId', 'times_watched', 'is_favorite', 'recency_score', 'plan_to_watch']):
+        print("ERREUR: Le fichier CSV personnel ne contient pas toutes les colonnes requises.")
+        print("Requis: movieId, times_watched, is_favorite, recency_score, plan_to_watch")
+        return
 
-    # 3. Charger les notes MovieLens
-    movielens_ratings_df = loaders.load_ratings(surprise_format=False)
-
-    # 4. Augmenter le dataset et construire le trainset
-    augmented_trainset, _ = augment_ratings_and_build_trainset(movielens_ratings_df, implicit_ratings_df)
-
-    # 5. Entraîner et sauvegarder les modèles souhaités
-    # Adaptez les configurations selon vos meilleurs hyperparamètres/choix
-    models_to_train = {
-        'SVD': {'n_factors': 50, 'n_epochs': 20, 'lr_all':0.005, 'reg_all':0.02, 'random_state': 42},
-        'UserBased': {'k': 40, 'min_k': 2, 'sim_options': {'name': 'jaccard', 'min_support': 1, 'user_based': True}},
-        'ContentBased': {'features_methods': ["Genre_tfidf", "Year_of_release"], 'regressor_method': 'ridge'}
-    }
-
-    for model_type, config in models_to_train.items():
-        train_and_save_model(augmented_trainset, model_type, config, PERSONAL_USER_ID)
+    df_library['implicit_rating'] = df_library.apply(calculate_implicit_rating, axis=1)
     
-    print(f"Processus de construction des modèles pour l'utilisateur {PERSONAL_USER_ID} terminé.")
-    print(f"Les modèles et le trainset sont sauvegardés dans : {C.Constant.MODELS_STORAGE_PATH}")
+    # Préparer les ratings de Maxime pour la fusion
+    ratings_list = []
+    current_timestamp = int(time.time()) # Timestamp actuel
+    for _, row in df_library.iterrows():
+        ratings_list.append({
+            'userId': USER_ID,
+            'movieId': row['movieId'],
+            'rating': row['implicit_rating'],
+            'timestamp': current_timestamp
+        })
+    df_ratings = pd.DataFrame(ratings_list)
+    print(f"Notes implicites pour (userId={USER_ID}) calculées pour {len(df_ratings)} films.")
+    print(df_ratings.head())
+
+    # 2. Charger les ratings MovieLens et ajouter les ratings de Maxime
+    try:
+        df_movielens_ratings = pd.read_csv(PATH_TO_MOVIELENS_RATINGS)
+    except FileNotFoundError:
+        print(f"ERREUR: Le fichier de ratings MovieLens '{PATH_TO_MOVIELENS_RATINGS}' n'a pas été trouvé.")
+        return
+
+    # Vérifier si MAXIME_USER_ID existe déjà dans MovieLens (peu probable avec 0 ou -1)
+    if USER_ID in df_movielens_ratings['userId'].unique():
+        print(f"ATTENTION: L'userId {USER_ID} choisi pour Maxime existe déjà dans MovieLens. Choisis-en un autre.")
+        # Optionnel: tu pourrais choisir de supprimer cet utilisateur existant ou de lever une erreur.
+        # Pour cet exemple, on continue mais c'est à noter.
+
+    df_combined_ratings = pd.concat([df_movielens_ratings, df_ratings], ignore_index=True)
+    print(f"Taille du dataset MovieLens original: {len(df_movielens_ratings)} ratings.")
+    print(f"Taille du dataset combiné (avec Maxime): {len(df_combined_ratings)} ratings.")
+
+    # 3. Construire le jeu d'entraînement Surprise
+    reader = Reader(rating_scale=(0.5, 5.0))
+    data = Dataset.load_from_df(df_combined_ratings[['userId', 'movieId', 'rating']], reader)
+    trainset = data.build_full_trainset() # Utilise toutes les données pour l'entraînement final du modèle
+
+    # 4. Entraîner un modèle (par exemple SVD)
+    print("Entraînement du modèle SVD personnalisé...")
+    algo = SVD(n_factors=100, n_epochs=20, biased=True, lr_all=0.005, reg_all=0.02, verbose=True) # Tu peux utiliser ton SVDAlgorithm de models.py aussi
+    algo.fit(trainset)
+    print("Entraînement terminé.")
+
+    # 5. Sauvegarder le modèle entraîné
+    model_full_path = os.path.join(OUTPUT_MODEL_PATH, PERSONALIZED_MODEL_NAME)
+    print(f"Sauvegarde du modèle personnalisé dans: {model_full_path}")
+    dump.dump(model_full_path, algo=algo)
+    print("Modèle sauvegardé avec succès!")
+    print(f"\nPour utiliser ce modèle, charge-le avec: _, loaded_algo = dump.load('{model_full_path}')")
 
 if __name__ == '__main__':
-    # Avant de lancer, assurez-vous que C.Constant.PERSONAL_LIBRARY_PATH,
-    # C.Constant.MODELS_STORAGE_PATH, C.Constant.TRAINSET_STORAGE_FILE,
-    # et C.Constant.MODEL_STORAGE_FILE_TEMPLATE sont bien définis dans votre constants.py
-    # et que le dossier C.Constant.MODELS_STORAGE_PATH existe.
-    # Exemple de définitions à ajouter dans constants.py si elles n'y sont pas :
-    # from pathlib import Path
-    # class Constant:
-    #     # ... vos constantes existantes ...
-    #     DATA_ROOT = Path(__file__).parent.parent # Suppose que constants.py est dans un sous-dossier du projet
-    #     PERSONAL_LIBRARY_PATH = DATA_ROOT / 'data' / 'implicit_libraries' / 'library_votrenom.csv' # Adaptez "votrenom"
-    #     MODELS_STORAGE_PATH = DATA_ROOT / 'data' / 'small' / 'recs_personalized' # Ou le chemin de Workshop 2 "data/small/recs" [cite: 22]
-    #     MODELS_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
-    #     TRAINSET_STORAGE_FILE = MODELS_STORAGE_PATH / "augmented_trainset_user{}.pkl"
-    #     MODEL_STORAGE_FILE_TEMPLATE = MODELS_STORAGE_PATH / "user{}_{}_model.pkl"
-
-    import pickle # Ajout de l'import pickle ici pour la sauvegarde du trainset
-    main()
+    build_and_save_personalized_model()
