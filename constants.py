@@ -6,7 +6,7 @@ class Constant:
 
 
 
-    DATA_PATH = Path('mlsmm2156/data/small')  # -- fill here the dataset size to use
+    DATA_PATH = Path('mlsmm2156/data/tiny')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'

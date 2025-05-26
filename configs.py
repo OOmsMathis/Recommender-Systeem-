@@ -5,14 +5,22 @@ from models import *
 
 class EvalConfig:  
     models = [
-        # Ridge regression on each individual feature
-        ("content_ridge_title_length", ContentBased, {"features_methods": ["title_length"], "regressor_method": "ridge"}),
-        # Baseline SVD model
-        ("baseline4_svd", UserBased, {"model_type": "svd", "n_factors": 100, "n_epochs": 20, "lr_all": 0.005, "reg_all": 0.02}),
+        (
+            "User_based",
+            UserBased,
+            {
+                "k": 40,
+                "min_k": 1,
+                "sim_options": {
+                    "name": "cosine",
+                    "user_based": True
+                }
+            }
+        ),
     ]
 
-    split_metrics = ["mae","rmse"]
-    loo_metrics = ["hit_rate"]
+    split_metrics = ["mae","rmse", "accuracy"]
+    loo_metrics = ["hit_rate","precision"]
     full_metrics = ["novelty"]
 
     # Split parameters
