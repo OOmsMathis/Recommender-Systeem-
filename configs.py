@@ -6,13 +6,61 @@ from models import *
 class EvalConfig:  
     models = [
         (
-            "User_based",
+            "User_based_cosine",
             UserBased,
             {
-                "k": 40,
-                "min_k": 1,
+                "k": 5,
+                "min_k": 3,
                 "sim_options": {
                     "name": "cosine",
+                    "user_based": True
+                }
+            }
+        ),
+        (
+            "User_based_msd",
+            UserBased,
+            {
+                "k": 5,
+                "min_k": 3,
+                "sim_options": {
+                    "name": "msd",
+                    "user_based": True
+                }
+            }
+        ),
+        (
+            "User_based_pearson",
+            UserBased,
+            {
+                "k": 5,
+                "min_k": 3,
+                "sim_options": {
+                    "name": "pearson",
+                    "user_based": True
+                }
+            }
+        ),
+        (
+            "User_based_pearson_baseline",
+            UserBased,
+            {
+                "k": 5,
+                "min_k": 3,
+                "sim_options": {
+                    "name": "pearson_baseline",
+                    "user_based": True
+                }
+            }
+        ),
+        (
+            "User_based_jaccard",
+            UserBased,
+            {
+                "k": 5,
+                "min_k": 3,
+                "sim_options": {
+                    "name": "jaccard",
                     "user_based": True
                 }
             }

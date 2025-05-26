@@ -28,6 +28,6 @@ class Constant:
 
     # Rating scale
     RATINGS_SCALE = (1, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
-    EVALUATION_PATH = Path('mlsmm2156/data/small/evaluations')
+    EVALUATION_PATH = Path('mlsmm2156/data/tiny/evaluations')
 
    
