@@ -47,15 +47,16 @@ print("SVDAlgo entraîné et sauvegardé.")
 
 # 2. UserBased
 print("\n--- UserBased ---")
-user_based_model = UserBased(k=40, min_k=2, sim_options={'name': 'msd', 'user_based': True}, verbose=True)
+sim_method = 'msd'  # Change ici si tu veux tester d'autres méthodes de similarité
+user_based_model = UserBased(k=40, min_k=2, sim_options={'name': sim_method, 'user_based': True}, verbose=True)
 user_based_model.fit(trainset_full)
-dump.dump(os.path.join(OUTPUT_MODELS_DIR, 'user_based_model_final.p'), algo=user_based_model)
-print("UserBased entraîné et sauvegardé.")
+user_based_filename = f"user_based_model_{sim_method}_final.p"
+dump.dump(os.path.join(OUTPUT_MODELS_DIR, user_based_filename), algo=user_based_model)
+print(f"UserBased entraîné et sauvegardé sous {user_based_filename}.")
 
 # 3. ContentBased
 #    Définis ici la liste des features que tu veux que ton ContentBased utilise.
 
-print("\n--- ContentBased (Exemple avec 'toutes' tes features potentielles) ---")
 features = [
     "title_length", 
     #"Year_of_release", 
@@ -74,9 +75,15 @@ cb_model_all_features = ContentBased(
     regressor_method=regressor_method
 )
 cb_model_all_features.fit(trainset_full)
-filename = f"content_based_{regressor_method}_all_features.p"
+
+# Génère un nom de fichier basé sur les features sélectionnées
+features_str = "_".join([f for f in features if not f.startswith("#")]).replace(" ", "")
+if not features_str:
+    features_str = "nofeatures"
+filename = f"content_based_{regressor_method}_{features_str}.p"
+
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, filename), algo=cb_model_all_features)
-print(f"ContentBased ({regressor_method} avec {len(features)} types de features) entraîné et sauvegardé.")
+print(f"ContentBased ({regressor_method} avec {len(features)} types de features) entraîné et sauvegardé sous {filename}.")
 
 
 print(f"\n\nTous les modèles sélectionnés ont été entraînés et sauvegardés dans '{OUTPUT_MODELS_DIR}'")

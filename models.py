@@ -107,15 +107,15 @@ class ContentBased(AlgoBase):
                     current_feature_df_list.append(df_title_length)
 
                 elif feature_method == "Year_of_release":
-                    year_series = None
-                    if C.TMDB_RELEASE_DATE_COL in df_items_indexed.columns: # Priorité à TMDB
-                        year_series = pd.to_datetime(df_items_indexed[C.TMDB_RELEASE_DATE_COL], errors='coerce').dt.year
-                    elif C.LABEL_COL in df_items_indexed.columns: # Fallback sur extraction du titre
-                        year_series = df_items_indexed[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
-                    
-                    if year_series is not None:
-                        df_year = self._normalize_column(year_series).to_frame('year_of_release')
+                # Utilise directement la colonne C.RELEASE_YEAR_COL créée dans loaders.py
+                    if C.RELEASE_YEAR_COL in df_items_indexed.columns:
+                        series = df_items_indexed[C.RELEASE_YEAR_COL]
+                        # La normalisation gérera les NaN restants
+                        df_year = self._normalize_column(series).to_frame('year_of_release')
                         current_feature_df_list.append(df_year)
+                    else:
+                        print(f"AVERTISSEMENT: Colonne '{C.RELEASE_YEAR_COL}' pour Year_of_release non trouvée dans df_items_indexed.")
+                    
 
                 elif feature_method == "average_ratings":
                     if df_ratings_global.empty: continue

@@ -11,8 +11,10 @@ class Constant:
     # - item
     ITEMS_FILENAME = 'movies.csv'
     ITEM_ID_COL = 'movieId'
-    LABEL_COL = 'title'
+    LABEL_COL = 'title'   
+    RELEASE_YEAR_COL = 'release_year'
     GENRES_COL = 'genres'
+    
 
     # Links
     LINKS_FILENAME = 'links.csv'
