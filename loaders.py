@@ -26,7 +26,7 @@ def export_evaluation_report(df, accuracy=None, precision=None):
     """
     Export the evaluation report to the specified evaluation directory in constants.
     Adds columns for accuracy and precision.
-    Appends new evaluations to the existing file if it exists.
+    Generates a new report file each time without overwriting previous ones.
 
     Args:
         df (DataFrame): The DataFrame containing the evaluation report.
@@ -35,16 +35,17 @@ def export_evaluation_report(df, accuracy=None, precision=None):
     """
 
     today_str = datetime.now().strftime("%Y_%m_%d")
-    filename = f"evaluation_report_{today_str}.csv"
-    path = C.EVALUATION_PATH / filename
+    base_filename = f"evaluation_report_{today_str}"
+    i = 1
+    while True:
+        filename = f"{base_filename}_{i}.csv"
+        path = C.EVALUATION_PATH / filename
+        if not path.exists():
+            break
+        i += 1
 
     df = df.copy()
 
-
-    # If file exists, append without header; else, create new file with header
-    if path.exists():
-        df.to_csv(path, mode='a', header=False, index=False)
-    else:
-        df.to_csv(path, index=False)
+    df.to_csv(path, index=False)
     print(f"Evaluation report successfully exported to: {path}")
 

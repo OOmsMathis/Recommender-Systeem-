@@ -10,7 +10,7 @@ class EvalConfig:
             UserBased,
             {
                 "k": 5,
-                "min_k": 3,
+                "min_k": 2,
                 "sim_options": {
                     "name": "cosine",
                     "user_based": True
@@ -22,7 +22,7 @@ class EvalConfig:
             UserBased,
             {
                 "k": 5,
-                "min_k": 3,
+                "min_k": 2,
                 "sim_options": {
                     "name": "msd",
                     "user_based": True
@@ -34,7 +34,7 @@ class EvalConfig:
             UserBased,
             {
                 "k": 5,
-                "min_k": 3,
+                "min_k": 2,
                 "sim_options": {
                     "name": "pearson",
                     "user_based": True
@@ -46,21 +46,9 @@ class EvalConfig:
             UserBased,
             {
                 "k": 5,
-                "min_k": 3,
+                "min_k": 2,
                 "sim_options": {
                     "name": "pearson_baseline",
-                    "user_based": True
-                }
-            }
-        ),
-        (
-            "User_based_jaccard",
-            UserBased,
-            {
-                "k": 5,
-                "min_k": 3,
-                "sim_options": {
-                    "name": "jaccard",
                     "user_based": True
                 }
             }
@@ -69,7 +57,7 @@ class EvalConfig:
 
     split_metrics = ["mae","rmse", "accuracy"]
     loo_metrics = ["hit_rate","precision"]
-    full_metrics = ["novelty"]
+    full_metrics = ["novelty", "diversity"]
 
     # Split parameters
     test_size = 0.25  # -- configure the test_size (from 0 to 1) --
