@@ -58,15 +58,15 @@ print(f"UserBased entraîné et sauvegardé sous {user_based_filename}.")
 #    Définis ici la liste des features que tu veux que ton ContentBased utilise.
 
 features = [
-    "title_length", 
+    #"title_length", 
     #"Year_of_release", 
     #"average_ratings", 
     #"count_ratings", 
     #"Genre_binary", 
-    #"Genre_tfidf", 
-    #"Tags_tfidf", 
+    "Genre_tfidf", 
+    "Tags_tfidf", 
     #"tmdb_vote_average", 
-    #"title_tfidf", 
+    "title_tfidf", 
 ]
 regressor_method = 'ridge'  # Change ici pour tester d'autres régressseurs si besoin
 
@@ -80,8 +80,8 @@ cb_model_all_features.fit(trainset_full)
 features_str = "_".join([f for f in features if not f.startswith("#")]).replace(" ", "")
 if not features_str:
     features_str = "nofeatures"
-filename = f"content_based_{regressor_method}_{features_str}.p"
-
+#filename = f"content_based_{regressor_method}_{features_str}.p"
+filename = f"content_based_{regressor_method}_final.p"
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, filename), algo=cb_model_all_features)
 print(f"ContentBased ({regressor_method} avec {len(features)} types de features) entraîné et sauvegardé sous {filename}.")
 
