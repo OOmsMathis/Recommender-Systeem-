@@ -57,3 +57,5 @@ class Constant:
     EVALUATION_PATH = Path('data/small/evaluations')
 
    
+    NEW_RATINGS_PENDING_FILENAME = 'new_ratings_pending.csv'
+    USER_PROFILES_FILENAME = 'user_profiles.csv'

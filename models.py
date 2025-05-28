@@ -217,7 +217,7 @@ class ContentBased(AlgoBase):
 
             model = None
             if self.regressor_method == 'linear': model = LinearRegression(fit_intercept=True)
-            elif self.regressor_method == 'ridge': model = Ridge(alpha=0.5) 
+            elif self.regressor_method == 'ridge': model = Ridge(alpha=1.0) 
             elif self.regressor_method == 'lasso': model = Lasso(alpha=0.05)
             else:
                 print(f"ContentBased Fit: ERREUR - Méthode de régression '{self.regressor_method}' non reconnue pour user {user_raw_id}.")
