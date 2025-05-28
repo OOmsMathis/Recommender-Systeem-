@@ -1,39 +1,31 @@
-# third parties imports
+# constants.py
 from pathlib import Path
 
-
 class Constant:
-
-    DATA_PATH = Path('data/small')  # -- fill here the dataset size to use
+    DATA_PATH = Path('data/small')
+    
+    # Fichier pour mapper Prénom (optionnel) à UserID numérique
+    USER_PRENOM_TO_ID_MAP_FILE = DATA_PATH / '_user_prenom_to_id_map.json'
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
-    # - item
     ITEMS_FILENAME = 'movies.csv'
     ITEM_ID_COL = 'movieId'
     LABEL_COL = 'title'   
     RELEASE_YEAR_COL = 'release_year'
     GENRES_COL = 'genres'
     
-
-    # Links
     LINKS_FILENAME = 'links.csv'
-    ITEMS_ID_COL = 'movieId'
     TMDB_ID_COL = 'tmdbId'
     IMDB_ID_COL = 'imdbId'
 
-    # tags
     TAGS_FILENAME = 'tags.csv'
-    USER_ID_COL = 'userID'
-    ITEMS_ID_COL = 'movieId'
+    USER_ID_COL = 'userId' # Important: utilisé pour les ratings
     TAG_COL = 'tag'
     TIMESTAMP_COL = 'timestamp'
 
-    # Tmdb
     TMDB_FILENAME = 'tmdb_full_features.csv'
-    ITEMS_ID_COL = 'movieId'
     RUNTIME_COL = 'runtime'
-    GENRES_COL = 'genres'
     CAST_COL = 'cast'
     DIRECTORS_COL = 'directors'
     VOTE_COUNT_COL = 'vote_count'
@@ -43,17 +35,16 @@ class Constant:
     REVENUE_COL = 'revenue'
     ORIGINAL_LANGUAGE_COL = 'original_language'
 
-    # Evidence
+    # Evidence (Source de vérité pour les ratings)
     EVIDENCE_PATH = DATA_PATH / 'evidence'
-    # - ratings
-    RATINGS_FILENAME = 'ratings.csv'
-    USER_ID_COL = 'userId'
+    RATINGS_FILENAME = 'ratings.csv' # CE FICHIER SERA MIS À JOUR
     RATING_COL = 'rating'
-    TIMESTAMP_COL = 'timestamp'
-    USER_ITEM_RATINGS = [USER_ID_COL, ITEM_ID_COL, RATING_COL]
+    USER_ITEM_RATINGS_COLS = [USER_ID_COL, ITEM_ID_COL, RATING_COL]
 
-    # Rating scale
-    RATINGS_SCALE = (1, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
-    EVALUATION_PATH = Path('data/small/evaluations')
+    RATINGS_SCALE = (0.5, 5.0)
+    
+    EVALUATION_PATH = DATA_PATH / 'evaluations'
+    MODELS_RECS_PATH = DATA_PATH / 'recs' # Chemin pour les modèles généraux sauvegardés
 
-   
+    NEW_USER_MOVIES_TO_RATE_COUNT = 20 # Nombre de films à présenter pour notation
+    NEW_USER_MIN_RATINGS_FOR_SAVE = 5  # Nombre minimum de notes pour sauvegarder le profil

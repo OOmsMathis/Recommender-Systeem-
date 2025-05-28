@@ -14,7 +14,7 @@ USER_ID = 0 # Choisis un ID non utilisé par MovieLens
 
 # Adapte ces chemins à ta structure de projet
 PATH_TO_MOVIELENS_RATINGS = 'data/small/evidence/ratings.csv' # Chemin vers tes ratings MovieLens
-PATH_TO_LIBRARY = f'library_{PERSON_NAME}.csv' # Chemin vers le fichier CSV personnel
+PATH_TO_LIBRARY = f'data/library_{PERSON_NAME}.csv' # Chemin vers le fichier CSV personnel
 OUTPUT_MODEL_PATH = 'data/small/recs/'
 PERSONALIZED_MODEL_NAME = f'svd_{PERSON_NAME}_personalized.p'
 USER_ID = 0 # Choisis un ID non utilisé par MovieLens (0 ou -1 sont de bonnes options)
