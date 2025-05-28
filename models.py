@@ -108,8 +108,25 @@ class ModelBaseline3(AlgoBase):
     
 # Fourth algorithm
 class ModelBaseline4(SVD):
-    def __init__(self, random_state=1):
-        super().__init__(n_factors=100, random_state=random_state)
+    def __init__(
+        self,
+        n_factors=100,
+        n_epochs=20,
+        lr_all=0.005,
+        reg_all=0.02,
+        biased=True,
+        random_state=1,
+        **kwargs
+    ):
+        super().__init__(
+            n_factors=n_factors,
+            n_epochs=n_epochs,
+            lr_all=lr_all,
+            reg_all=reg_all,
+            biased=biased,
+            random_state=random_state,
+            **kwargs
+        )
 
 
 class UserBased(AlgoBase):
