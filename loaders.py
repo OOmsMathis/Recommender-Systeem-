@@ -34,15 +34,42 @@ def clean_genre_string(genre_str):
     Ex: " Action ,Adventure | |  Sci-Fi " -> "Action|Adventure|Sci-Fi"
     """
     if pd.isna(genre_str) or not isinstance(genre_str, str):
-        return '' # Retourne une chaîne vide pour les NaN ou les types incorrects
-    
-    # Remplacer les séparateurs courants (virgule, point-virgule) par des pipes
+        return '' 
     cleaned_genres = re.sub(r'\s*[,;/]\s*', '|', genre_str)
-    
-    # Diviser par pipe, nettoyer chaque genre, et rejoindre
-    genres_list = [g.strip() for g in cleaned_genres.split('|') if g.strip()] # Nettoie et enlève les vides
-    
+    genres_list = [g.strip() for g in cleaned_genres.split('|') if g.strip()]
     return '|'.join(genres_list)
+
+def reformat_movie_title_core(title_str_no_year):
+    """
+    Reformate les titres de films (sans année) pour déplacer les articles de la fin vers le début.
+    Ex: "Lion King, The" -> "The Lion King"
+    Ex: "Léon: The Professional" -> "Léon: The Professional" (ne change pas)
+    Ex: "Beautiful Mind, A" -> "A Beautiful Mind"
+    Ex: "Legend of 1900, The (a.k.a. The Legend of the...)" -> "The Legend of 1900 (a.k.a. The Legend of the...)"
+    """
+    if pd.isna(title_str_no_year) or not isinstance(title_str_no_year, str):
+        return title_str_no_year
+
+    title_stripped = title_str_no_year.strip()
+    
+    # Regex modifiée pour "Titre, L'Article SuffixeOptionnel"
+    # Groupe 1: (.*?) - Le titre principal (non-gourmand)
+    # Groupe 2: (The|A|An|L'|Le|La|Les) - L'article
+    # Groupe 3: (.*) - Tout ce qui suit l'article (y compris un espace initial s'il existe, ou une parenthèse)
+    match = re.match(r'^(.*?),\s*(The|A|An|L\'|Le|La|Les)(.*)$', title_stripped)
+    
+    if match:
+        main_title_part = match.group(1).strip()  # Titre avant la virgule et l'article
+        article = match.group(2).strip()          # L'article lui-même
+        suffix = match.group(3)                   # Le reste de la chaîne après l'article
+                                                  # suffix peut être vide, ou commencer par " (quelque chose)"
+                                                  # ou " quelque chose d'autre"
+
+        # Reconstruit le titre avec l'article au début, suivi du titre principal, puis du suffixe.
+        # Le .strip() final nettoie les espaces superflus au début ou à la fin.
+        return f"{article} {main_title_part}{suffix}".strip()
+        
+    return title_stripped 
 
 
 # --- Fonctions de Chargement ---
@@ -53,7 +80,6 @@ def load_ratings():
         expected_cols = [C.USER_ID_COL, C.ITEM_ID_COL, C.RATING_COL]
         if not all(col in df_ratings.columns for col in expected_cols):
             print(f"AVERTISSEMENT (load_ratings): Colonnes attendues {expected_cols} non toutes trouvées dans {ratings_filepath}. Colonnes présentes: {df_ratings.columns.tolist()}")
-        print(f"Chargé df_ratings: {df_ratings.shape} depuis {ratings_filepath}")
         return df_ratings
     except FileNotFoundError:
         print(f"ERREUR (load_ratings): Fichier ratings non trouvé à '{ratings_filepath}'.")
@@ -67,136 +93,143 @@ def load_items():
     tmdb_filepath = C.CONTENT_PATH / C.TMDB_FILENAME
     links_filepath = C.CONTENT_PATH / C.LINKS_FILENAME
 
+    print("load_items: Début du chargement des items...")
     try:
         df_movies = pd.read_csv(movies_filepath)
-        print(f"Chargé df_movies: {df_movies.shape} depuis {movies_filepath}")
 
         if C.ITEM_ID_COL not in df_movies.columns:
             raise KeyError(f"Colonne '{C.ITEM_ID_COL}' non trouvée dans {movies_filepath}.")
         
         if C.LABEL_COL in df_movies.columns:
-            df_movies[C.RELEASE_YEAR_COL] = df_movies[C.LABEL_COL].str.extract(r'\((\d{4})\)\s*$', expand=False).astype(float)
-            print(f"Colonne '{C.RELEASE_YEAR_COL}' créée à partir de '{C.LABEL_COL}' de {C.ITEMS_FILENAME}.")
+            print(f"Traitement des titres dans la colonne '{C.LABEL_COL}'...")
+            # 1. Extraire l'année et la stocker
+            df_movies[C.RELEASE_YEAR_COL] = df_movies[C.LABEL_COL].str.extract(r'\((\d{4})\)\s*$', expand=False)
+            df_movies[C.RELEASE_YEAR_COL] = pd.to_numeric(df_movies[C.RELEASE_YEAR_COL], errors='coerce').astype('Int64')
+            # print("  Année extraite.")
+
+            # 2. Supprimer l'année de la chaîne de titre originale
+            df_movies[C.LABEL_COL] = df_movies[C.LABEL_COL].str.replace(r'\s*\(\d{4}\)\s*$', '', regex=True).str.strip()
+            # print("  Année supprimée de la chaîne de titre.")
+
+            # 3. Reformater le titre (déplacer l'article) sur le titre sans année
+            df_movies[C.LABEL_COL] = df_movies[C.LABEL_COL].apply(reformat_movie_title_core)
+            # print(f"  Articles déplacés au début des titres.")
         else:
-            print(f"AVERTISSEMENT (load_items): Colonne titre '{C.LABEL_COL}' non trouvée. Année non extraite du titre.")
+            print(f"AVERTISSEMENT (load_items): Colonne titre '{C.LABEL_COL}' non trouvée. Année et titres non traités.")
             df_movies[C.RELEASE_YEAR_COL] = pd.NA 
 
         df_items_rich = df_movies.copy()
 
-        # **Nettoyage amélioré de la colonne GENRES_COL**
         if C.GENRES_COL in df_items_rich.columns:
-            print(f"Nettoyage de la colonne '{C.GENRES_COL}'...")
             df_items_rich[C.GENRES_COL] = df_items_rich[C.GENRES_COL].apply(clean_genre_string)
-            print(f"  Colonne '{C.GENRES_COL}' nettoyée et standardisée avec '|' comme séparateur.")
 
         try:
             df_tmdb = pd.read_csv(tmdb_filepath, low_memory=False)
-            print(f"Chargé df_tmdb: {df_tmdb.shape} depuis {tmdb_filepath}")
-
             if 'id' in df_tmdb.columns and C.ITEM_ID_COL not in df_tmdb.columns:
-                df_tmdb = df_tmdb.rename(columns={'id': C.ITEM_ID_COL}) # S'assurer que la colonne ID est bien nommée
+                df_tmdb = df_tmdb.rename(columns={'id': C.ITEM_ID_COL})
             
             if C.ITEM_ID_COL not in df_tmdb.columns:
                 print(f"AVERTISSEMENT (load_items): Colonne '{C.ITEM_ID_COL}' non trouvée dans {tmdb_filepath}. TMDB non fusionné.")
             else: 
-                tmdb_cols_to_select = [C.ITEM_ID_COL] # Toujours inclure l'ID pour la fusion
+                tmdb_cols_to_select = [C.ITEM_ID_COL]
                 defined_tmdb_constants_attributes = [
                     'GENRES_COL', 'RUNTIME_COL', 'CAST_COL', 'DIRECTORS_COL',
                     'VOTE_COUNT_COL', 'VOTE_AVERAGE_COL', 
                     'POPULARITY_COL', 'BUDGET_COL', 'REVENUE_COL', 'ORIGINAL_LANGUAGE_COL',
                 ]
                 
+                tmdb_title_col_name = 'title' # Nom commun pour le titre dans les datasets TMDB
+                tmdb_release_date_col_name = 'release_date' # Nom commun pour la date de sortie TMDB
+
+                if tmdb_title_col_name in df_tmdb.columns and tmdb_title_col_name not in tmdb_cols_to_select:
+                    tmdb_cols_to_select.append(tmdb_title_col_name)
+                if tmdb_release_date_col_name in df_tmdb.columns and tmdb_release_date_col_name not in tmdb_cols_to_select:
+                     tmdb_cols_to_select.append(tmdb_release_date_col_name)
+
+
                 for attr_name in defined_tmdb_constants_attributes:
                     if hasattr(C, attr_name): 
                         col_name = getattr(C, attr_name) 
-                        # S'assurer que la colonne existe dans df_tmdb et n'est pas déjà sélectionnée
                         if col_name in df_tmdb.columns and col_name not in tmdb_cols_to_select:
                             tmdb_cols_to_select.append(col_name)
                 
-                print(f"Colonnes TMDB sélectionnées pour fusion (basées sur constants.py): {tmdb_cols_to_select}")
                 df_tmdb_subset = df_tmdb[tmdb_cols_to_select].copy()
 
-                # Si GENRES_COL vient aussi de TMDB, il faut aussi le nettoyer
+                # Traitement des titres TMDB (supprimer année, reformater article)
+                processed_tmdb_titles = pd.Series(index=df_tmdb_subset.index, dtype=str)
+                if tmdb_title_col_name in df_tmdb_subset.columns:
+                    # Supprimer l'année si elle est entre parenthèses à la fin du titre TMDB
+                    processed_tmdb_titles = df_tmdb_subset[tmdb_title_col_name].str.replace(r'\s*\(\d{4}\)\s*$', '', regex=True).str.strip()
+                    processed_tmdb_titles = processed_tmdb_titles.apply(reformat_movie_title_core)
+                    df_tmdb_subset['processed_tmdb_title'] = processed_tmdb_titles # Nouvelle colonne pour le titre TMDB traité
+
+                # Extraire l'année de la date de sortie TMDB si disponible et si RELEASE_YEAR_COL n'est pas déjà prioritaire
+                if tmdb_release_date_col_name in df_tmdb_subset.columns:
+                    df_tmdb_subset['tmdb_year'] = pd.to_datetime(df_tmdb_subset[tmdb_release_date_col_name], errors='coerce').dt.year.astype('Int64')
+
+
                 if C.GENRES_COL in df_tmdb_subset.columns:
-                    print(f"Nettoyage de la colonne '{C.GENRES_COL}' provenant de TMDB...")
-                    # TMDB genres sont souvent des listes de dicts JSON stringifiées.
-                    # Exemple: "[{'id': 28, 'name': 'Action'}, {'id': 12, 'name': 'Adventure'}]"
-                    # Il faut d'abord parser cela pour extraire les noms, puis les joindre par '|'.
                     def parse_tmdb_genres(genre_json_str):
-                        if pd.isna(genre_json_str) or not isinstance(genre_json_str, str):
-                            return ''
+                        if pd.isna(genre_json_str) or not isinstance(genre_json_str, str): return ''
                         try:
                             genre_list = ast.literal_eval(genre_json_str)
                             if isinstance(genre_list, list):
                                 names = [item['name'] for item in genre_list if isinstance(item, dict) and 'name' in item]
-                                return '|'.join(sorted(list(set(names)))) # Trier pour consistance
+                                return '|'.join(sorted(list(set(names))))
                             return ''
-                        except (ValueError, SyntaxError):
-                            return '' # Si ce n'est pas un JSON valide, retourner vide
-                    
+                        except: return '' 
                     df_tmdb_subset[C.GENRES_COL] = df_tmdb_subset[C.GENRES_COL].apply(parse_tmdb_genres)
-                    print(f"  Colonne '{C.GENRES_COL}' de TMDB nettoyée.")
-
 
                 if hasattr(C, 'CAST_COL') and C.CAST_COL in df_tmdb_subset.columns:
-                    print(f"  Parsing (si str JSON) de la colonne TMDB: {C.CAST_COL}")
                     df_tmdb_subset[C.CAST_COL] = parse_literal_eval_column(df_tmdb_subset[C.CAST_COL])
                     if hasattr(C, 'TMDB_CAST_NAMES_COL'):
                          df_tmdb_subset[C.TMDB_CAST_NAMES_COL] = df_tmdb_subset[C.CAST_COL].apply(lambda x: extract_names(x, key='name', max_items=5))
 
                 if hasattr(C, 'DIRECTORS_COL') and C.DIRECTORS_COL in df_tmdb_subset.columns:
-                    print(f"  Parsing (si str JSON) de la colonne TMDB: {C.DIRECTORS_COL}")
                     df_tmdb_subset[C.DIRECTORS_COL] = parse_literal_eval_column(df_tmdb_subset[C.DIRECTORS_COL])
-                    # Si vous avez besoin d'extraire les noms des directeurs à partir d'une structure plus complexe (ex: 'crew')
-                    # vous devrez adapter cette partie. Pour l'instant, on assume que C.DIRECTORS_COL est soit une liste de noms
-                    # soit une structure que parse_literal_eval_column peut gérer.
+                
+                # Fusion
+                df_items_rich = pd.merge(
+                    df_items_rich, 
+                    df_tmdb_subset.drop(columns=[tmdb_title_col_name, tmdb_release_date_col_name], errors='ignore'), # Drop originaux TMDB si traités
+                    on=C.ITEM_ID_COL, 
+                    how='left',
+                    suffixes=('_ml', '_tmdb') # Suffixes pour les colonnes restantes du merge
+                )
 
-                # Fusion avec df_items_rich
-                # S'il y a des colonnes communes (autre que ITEM_ID_COL), celles de TMDB (df_tmdb_subset) prendront le dessus
-                # si elles ne sont pas écrasées par celles de df_movies.
-                # La gestion des colonnes de genre est importante ici.
-                # Si df_movies a 'genres' et df_tmdb a 'genres', laquelle utiliser ?
-                # Actuellement, on nettoie les deux. La fusion va utiliser les colonnes de df_tmdb_subset
-                # pour les colonnes qui existent dans les deux, sauf si on les renomme ou les gère spécifiquement.
+                # Prioriser le titre TMDB traité s'il existe et est non vide
+                if 'processed_tmdb_title' in df_items_rich.columns:
+                    mask_tmdb_title_valid = df_items_rich['processed_tmdb_title'].notna() & (df_items_rich['processed_tmdb_title'].str.strip() != '')
+                    df_items_rich.loc[mask_tmdb_title_valid, C.LABEL_COL] = df_items_rich.loc[mask_tmdb_title_valid, 'processed_tmdb_title']
+                    df_items_rich.drop(columns=['processed_tmdb_title'], inplace=True, errors='ignore')
 
-                # Pour les genres, si df_items_rich a déjà une colonne GENRES_COL (de movies.csv)
-                # et que df_tmdb_subset a aussi une colonne GENRES_COL, la fusion va créer GENRES_COL_x et GENRES_COL_y.
-                # Il faut décider laquelle garder ou comment les combiner.
-                # Option 1: Prioriser TMDB si disponible.
-                if C.GENRES_COL in df_items_rich.columns and C.GENRES_COL in df_tmdb_subset.columns:
-                    # On va fusionner, puis on utilisera la colonne de TMDB (_y) si elle n'est pas vide, sinon celle de movies.csv (_x)
-                    df_items_rich = pd.merge(
-                        df_items_rich, 
-                        df_tmdb_subset, 
-                        on=C.ITEM_ID_COL, 
-                        how='left',
-                        suffixes=('_movies', '_tmdb') # Suffixes pour différencier
-                    )
-                    # Combiner les colonnes de genres
-                    genres_col_tmdb = C.GENRES_COL + '_tmdb'
-                    genres_col_movies = C.GENRES_COL + '_movies'
-                    
-                    # Utiliser les genres TMDB si présents et non vides, sinon ceux de movies.csv
-                    df_items_rich[C.GENRES_COL] = df_items_rich[genres_col_tmdb].fillna('')
-                    mask_tmdb_empty = df_items_rich[C.GENRES_COL] == ''
-                    df_items_rich.loc[mask_tmdb_empty, C.GENRES_COL] = df_items_rich.loc[mask_tmdb_empty, genres_col_movies].fillna('')
-                    
-                    # Supprimer les colonnes temporaires _x et _y pour les genres et autres colonnes dupliquées
-                    cols_to_drop_after_merge = [col for col in df_items_rich.columns if col.endswith('_movies') or col.endswith('_tmdb')]
-                    df_items_rich.drop(columns=cols_to_drop_after_merge, inplace=True, errors='ignore')
+                # Prioriser l'année TMDB si la colonne RELEASE_YEAR_COL est vide et tmdb_year est disponible
+                if 'tmdb_year' in df_items_rich.columns and C.RELEASE_YEAR_COL in df_items_rich.columns:
+                    mask_ml_year_missing = df_items_rich[C.RELEASE_YEAR_COL].isna()
+                    mask_tmdb_year_present = df_items_rich['tmdb_year'].notna()
+                    df_items_rich.loc[mask_ml_year_missing & mask_tmdb_year_present, C.RELEASE_YEAR_COL] = df_items_rich.loc[mask_ml_year_missing & mask_tmdb_year_present, 'tmdb_year']
+                    df_items_rich.drop(columns=['tmdb_year'], inplace=True, errors='ignore')
 
-                else: # Si GENRES_COL n'est que dans l'un ou l'autre, ou si on ne veut pas de suffixes
-                    cols_to_drop_from_main = df_items_rich.columns.intersection(df_tmdb_subset.columns).tolist()
-                    if C.ITEM_ID_COL in cols_to_drop_from_main:
-                        cols_to_drop_from_main.remove(C.ITEM_ID_COL)
-                    
-                    df_items_rich = pd.merge(
-                        df_items_rich.drop(columns=cols_to_drop_from_main, errors='ignore'), 
-                        df_tmdb_subset, 
-                        on=C.ITEM_ID_COL, 
-                        how='left'
-                    )
-                print(f"Après fusion avec TMDB: {df_items_rich.shape} lignes")
+
+                # Prioriser les genres de TMDB s'ils existent et ne sont pas vides (logique de suffixes)
+                genres_col_tmdb = C.GENRES_COL + '_tmdb'
+                genres_col_ml = C.GENRES_COL + '_ml' # Si C.GENRES_COL était dans df_items_rich avant merge
+                
+                if genres_col_tmdb in df_items_rich.columns : # Si la colonne genre de TMDB existe après merge
+                    if genres_col_ml in df_items_rich.columns: # Si la colonne genre de MovieLens existe aussi
+                        # Utiliser les genres TMDB si présents et non vides, sinon ceux de MovieLens
+                        df_items_rich[C.GENRES_COL] = df_items_rich[genres_col_tmdb].fillna('')
+                        mask_tmdb_g_empty = df_items_rich[C.GENRES_COL] == ''
+                        df_items_rich.loc[mask_tmdb_g_empty, C.GENRES_COL] = df_items_rich.loc[mask_tmdb_g_empty, genres_col_ml].fillna('')
+                    else: # Si seulement la colonne TMDB existe (ou a été nommée C.GENRES_COL par le merge)
+                        df_items_rich[C.GENRES_COL] = df_items_rich[genres_col_tmdb].fillna('')
+                elif genres_col_ml in df_items_rich.columns: # Si seulement la colonne MovieLens existe
+                     df_items_rich[C.GENRES_COL] = df_items_rich[genres_col_ml].fillna('')
+                # else: C.GENRES_COL a été géré correctement par le merge ou était déjà bon
+
+                cols_to_drop_after_merge = [col for col in df_items_rich.columns if col.endswith('_ml') or col.endswith('_tmdb')]
+                df_items_rich.drop(columns=cols_to_drop_after_merge, inplace=True, errors='ignore')
+                
         except FileNotFoundError:
             print(f"AVERTISSEMENT (load_items): Fichier TMDB '{tmdb_filepath}' non trouvé.")
         except Exception as e:
@@ -204,31 +237,23 @@ def load_items():
         
         try:
             df_links = pd.read_csv(links_filepath)
-            print(f"Chargé df_links: {df_links.shape} depuis {links_filepath}")
             if C.ITEM_ID_COL in df_links.columns and C.TMDB_ID_COL in df_links.columns:
                 df_links_subset = df_links[[C.ITEM_ID_COL, C.TMDB_ID_COL]].copy()
                 df_links_subset[C.TMDB_ID_COL] = pd.to_numeric(df_links_subset[C.TMDB_ID_COL], errors='coerce').astype('Int64')
-                
-                if C.TMDB_ID_COL in df_items_rich.columns: # Si TMDB_ID_COL existe déjà (ex: de tmdb_full_features)
+                if C.TMDB_ID_COL in df_items_rich.columns:
                     df_items_rich = df_items_rich.drop(columns=[C.TMDB_ID_COL], errors='ignore')
-
                 df_items_rich = pd.merge(df_items_rich, df_links_subset, on=C.ITEM_ID_COL, how='left')
-                print(f"Après fusion avec links (pour {C.TMDB_ID_COL}): {df_items_rich.shape} lignes.")
-            else:
-                print(f"AVERTISSEMENT (load_items): Colonnes '{C.ITEM_ID_COL}' ou '{C.TMDB_ID_COL}' manquantes dans {links_filepath}.")
         except FileNotFoundError:
             print(f"AVERTISSEMENT (load_items): Fichier links '{links_filepath}' non trouvé.")
         except Exception as e:
             print(f"AVERTISSEMENT (load_items): Erreur lors du chargement/fusion de links: {e}.")
                 
         if C.RELEASE_YEAR_COL in df_items_rich.columns:
-            df_items_rich[C.RELEASE_YEAR_COL] = pd.to_numeric(df_items_rich[C.RELEASE_YEAR_COL], errors='coerce')
+            df_items_rich[C.RELEASE_YEAR_COL] = pd.to_numeric(df_items_rich[C.RELEASE_YEAR_COL], errors='coerce').astype('Int64')
 
-        # Assurer l'unicité des colonnes si des fusions ont créé des doublons (ex: _x, _y non gérés)
         df_items_rich = df_items_rich.loc[:,~df_items_rich.columns.duplicated()]
 
-        print(f"DataFrame d'items final (df_items_global): {df_items_rich.shape} lignes")
-        print(f"Colonnes disponibles dans df_items_global à la fin de load_items: {df_items_rich.columns.tolist()}")
+        print(f"load_items: Chargement des items terminé. DataFrame final: {df_items_rich.shape} lignes.")
         return df_items_rich
 
     except FileNotFoundError: 
@@ -245,28 +270,22 @@ if __name__ == '__main__':
     print("Test de chargement des items...")
     try:
         df_i = load_items()
-        print("\nExtrait de df_items_global (après load_items):")
-        print(df_i[[C.ITEM_ID_COL, C.LABEL_COL, C.GENRES_COL]].head())
-        if C.GENRES_COL in df_i.columns:
-            print("\nExemples de chaînes de genres nettoyées:")
-            print(df_i[C.GENRES_COL].dropna().sample(5)) # Échantillon de 5 genres non NaN
-            
-            # Test pour voir les genres uniques qui seraient générés par app.py
-            genres_series_test = df_i[C.GENRES_COL].fillna('').astype(str)
-            s_genres_test = genres_series_test.str.split('|').explode()
-            unique_sidebar_genres_test = sorted([
-                g.strip() for g in s_genres_test.unique() if g.strip() and g.strip().lower() != '(no genres listed)'
-            ])
-            print("\nGenres uniques qui seraient générés pour la sidebar (test):")
-            print(unique_sidebar_genres_test[:20]) # Afficher les 20 premiers
-            
+        print("\nExtrait de df_items_global (titres sans année pour affichage):")
+        cols_to_show = [C.ITEM_ID_COL, C.LABEL_COL]
+        if C.RELEASE_YEAR_COL in df_i.columns: cols_to_show.append(C.RELEASE_YEAR_COL)
+        if C.GENRES_COL in df_i.columns: cols_to_show.append(C.GENRES_COL)
+        print(df_i[cols_to_show].head(10))
+
+        print("\nQuelques titres spécifiques pour vérifier le format (devraient être sans année) :")
+        titles_to_check = ["The Lion King", "A Beautiful Mind", "The Usual Suspects", "The Pianist"]
+        for title_check in titles_to_check:
+            # Chercher une correspondance partielle car les titres peuvent légèrement varier (ex: accents)
+            found_movies = df_i[df_i[C.LABEL_COL].str.contains(title_check.replace("The ", "").replace("A ", ""), case=False, na=False)]
+            if not found_movies.empty:
+                print(f"Trouvé pour '{title_check}':")
+                print(found_movies[[C.LABEL_COL, C.RELEASE_YEAR_COL]].head())
+            else:
+                print(f"Pas de correspondance trouvée pour '{title_check}' dans les titres traités.")
+        
     except Exception as e_test:
         print(f"Erreur pendant le test de load_items: {e_test}")
-
-    print("\nTest de chargement des ratings...")
-    try:
-        df_r = load_ratings()
-        print("\nExtrait de df_ratings_global (après load_ratings):")
-        print(df_r.head())
-    except Exception as e_test_r:
-        print(f"Erreur pendant le test de load_ratings: {e_test_r}")
