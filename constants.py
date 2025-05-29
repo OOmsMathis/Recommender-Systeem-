@@ -55,7 +55,8 @@ class Constant:
     # Rating scale
     RATINGS_SCALE = (1, 5)  # -- fill in here the ratings scale as a tuple (min_value, max_value)
     EVALUATION_PATH = Path('data/small/evaluations')
+    CARDS_PER_ROW = 5
+    N_RECOS_PERSONNALISEES_CAROUSEL = 20
 
-   
     NEW_RATINGS_PENDING_FILENAME = 'new_ratings_pending.csv'
     USER_PROFILES_FILENAME = 'user_profiles.csv'
