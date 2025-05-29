@@ -31,6 +31,7 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+from sklearn.preprocessing import StandardScaler
 
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -353,6 +354,7 @@ class ContentBased(AlgoBase):
                 df_merged_g = df_scores.merge(df_tags_g, on='tagId')
                 df_genome_features = df_merged_g.pivot_table(index='movieId', columns='tag', values='relevance', fill_value=0)
                 df_genome_features = df_genome_features.reindex(df_items.index, fill_value=0)
+                # Genome features (relevance scores, not scaled)
                 df_features = pd.concat([df_features, df_genome_features], axis=1)
 
             elif feature_method == "tfidf_relevance":
@@ -367,31 +369,58 @@ class ContentBased(AlgoBase):
                 tfidf_matrix = tfidf_vectorizer.fit_transform(df_texts['tags'])
                 tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_texts.index, columns=tfidf_vectorizer.get_feature_names_out())
                 tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
-                df_features = pd.concat([df_features, tfidf_df], axis=1)
+                # StandardScaler sur les valeurs TF-IDF
+                scaler = StandardScaler()
+                tfidf_scaled = scaler.fit_transform(tfidf_df)
+                tfidf_scaled_df = pd.DataFrame(tfidf_scaled, index=tfidf_df.index, columns=tfidf_df.columns)
+                df_features = pd.concat([df_features, tfidf_scaled_df], axis=1)
 
             elif feature_method == "tmdb_popularity":
                 df_tmdb_col = df_tmdb[['popularity']].copy()
-                df_features = df_features.join(df_tmdb_col, how='left')
+                scaler = StandardScaler()
+                df_tmdb_col['popularity'] = df_tmdb_col['popularity'].fillna(0)
+                df_tmdb_col['popularity_scaled'] = scaler.fit_transform(df_tmdb_col[['popularity']])
+                df_features = df_features.join(df_tmdb_col[['popularity_scaled']], how='left')
 
             elif feature_method == "tmdb_budget":
                 df_tmdb_col = df_tmdb[['budget']].copy()
-                df_features = df_features.join(df_tmdb_col, how='left')
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['budget'] = df_tmdb_col['budget'].fillna(0)
+                df_tmdb_col['budget_scaled'] = scaler.fit_transform(df_tmdb_col[['budget']])
+                df_features = df_features.join(df_tmdb_col[['budget_scaled']], how='left')
 
             elif feature_method == "tmdb_revenue":
                 df_tmdb_col = df_tmdb[['revenue']].copy()
-                df_features = df_features.join(df_tmdb_col, how='left')
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['revenue'] = df_tmdb_col['revenue'].fillna(0)
+                df_tmdb_col['revenue_scaled'] = scaler.fit_transform(df_tmdb_col[['revenue']])
+                df_features = df_features.join(df_tmdb_col[['revenue_scaled']], how='left')
 
             elif feature_method == "tmdb_profit":
                 df_tmdb_col = df_tmdb[['profit']].copy()
-                df_features = df_features.join(df_tmdb_col, how='left')
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['profit'] = df_tmdb_col['profit'].fillna(0)
+                df_tmdb_col['profit_scaled'] = scaler.fit_transform(df_tmdb_col[['profit']])
+                df_features = df_features.join(df_tmdb_col[['profit_scaled']], how='left')
 
             elif feature_method == "tmdb_runtime":
                 df_tmdb_col = df_tmdb[['runtime']].copy()
-                df_features = df_features.join(df_tmdb_col, how='left')
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['runtime'] = df_tmdb_col['runtime'].fillna(0)
+                df_tmdb_col['runtime_scaled'] = scaler.fit_transform(df_tmdb_col[['runtime']])
+                df_features = df_features.join(df_tmdb_col[['runtime_scaled']], how='left')
 
             elif feature_method == "tmdb_vote_count":
                 df_tmdb_col = df_tmdb[['vote_count']].copy()
-                df_features = df_features.join(df_tmdb_col, how='left')
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['vote_count'] = df_tmdb_col['vote_count'].fillna(0)
+                df_tmdb_col['vote_count_scaled'] = scaler.fit_transform(df_tmdb_col[['vote_count']])
+                df_features = df_features.join(df_tmdb_col[['vote_count_scaled']], how='left')
 
             elif feature_method == "tmdb_cast":
                 df_tmdb_col = df_tmdb[['cast']].copy()
@@ -450,7 +479,7 @@ class ContentBased(AlgoBase):
                 elif self.regressor_method == 'decision_tree':
                     model = DecisionTreeRegressor(max_depth=10, random_state=42)
                 elif self.regressor_method == 'ridge':
-                    model = Ridge(alpha=1.0)
+                    model = Ridge(alpha=0.15)
                 elif self.regressor_method == 'gradient_boosting':
                     model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
                 elif self.regressor_method == 'knn':
