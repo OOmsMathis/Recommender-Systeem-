@@ -98,30 +98,67 @@ def get_top_genre_movies_tmdb(genre, n=N_RECOS_PERSONNALISEES_TOTAL_FETCH, year_
     return top_genre_df_res[[col for col in cols_out if col in top_genre_df_res.columns]]
 
 @st.cache_data
-def get_hidden_gems_movies(n=N_RECOS_PERSONNALISEES_TOTAL_FETCH, genre_filter=None, year_min_filter=None, year_max_filter=None, min_vote_average=6.5, min_votes=20):
+def get_hidden_gems_movies(n=20, genre_filter=None, year_min_filter=None, year_max_filter=None,
+                           min_vote_average_initial=6.0,
+                           min_votes_initial=10,
+                           num_novel_candidates=100,
+                           excluded_genre="Documentary"): # Nouveau paramètre pour le genre à exclure
     if df_items_global_app.empty or not hasattr(C, 'VOTE_COUNT_COL') or C.VOTE_COUNT_COL not in df_items_global_app.columns \
        or not hasattr(C, 'VOTE_AVERAGE_COL') or C.VOTE_AVERAGE_COL not in df_items_global_app.columns:
         return pd.DataFrame()
+
     items_to_consider = df_items_global_app.copy()
+
+    # Application des filtres initiaux (genre de la sidebar, année)
     if genre_filter and genre_filter != "Tous les genres" and hasattr(C, 'GENRES_COL') and C.GENRES_COL in items_to_consider.columns:
         items_to_consider = items_to_consider[
             items_to_consider[C.GENRES_COL].astype(str).str.contains(re.escape(genre_filter), case=False, na=False, regex=True)
         ]
         if items_to_consider.empty: return pd.DataFrame()
-    items_to_consider[C.VOTE_COUNT_COL] = pd.to_numeric(items_to_consider[C.VOTE_COUNT_COL], errors='coerce').fillna(0)
-    items_to_consider[C.VOTE_AVERAGE_COL] = pd.to_numeric(items_to_consider[C.VOTE_AVERAGE_COL], errors='coerce').fillna(0)
-    items_to_consider = items_to_consider[items_to_consider[C.VOTE_AVERAGE_COL] >= min_vote_average]
-    items_to_consider = items_to_consider[items_to_consider[C.VOTE_COUNT_COL] >= min_votes]
+
     if year_min_filter is not None and year_max_filter is not None and hasattr(C, 'RELEASE_YEAR_COL') and C.RELEASE_YEAR_COL in items_to_consider.columns:
         items_to_consider[C.RELEASE_YEAR_COL] = pd.to_numeric(items_to_consider[C.RELEASE_YEAR_COL], errors='coerce').fillna(0)
         items_to_consider = items_to_consider[
             (items_to_consider[C.RELEASE_YEAR_COL] >= year_min_filter) &
             (items_to_consider[C.RELEASE_YEAR_COL] <= year_max_filter)
         ]
+        if items_to_consider.empty: return pd.DataFrame()
+
+    # Exclure le genre spécifié (ex: "Documentary") de cette section
+    if excluded_genre and hasattr(C, 'GENRES_COL') and C.GENRES_COL in items_to_consider.columns:
+        # Utiliser \b pour s'assurer que "Documentary" est un mot entier et non une partie d'un autre mot
+        # et case=False pour l'insensibilité à la casse.
+        items_to_consider = items_to_consider[
+            ~items_to_consider[C.GENRES_COL].astype(str).str.contains(r'\b' + re.escape(excluded_genre) + r'\b', case=False, na=False, regex=True)
+        ]
+        if items_to_consider.empty: return pd.DataFrame()
+
+
+    # Application des filtres de qualité minimale
+    items_to_consider[C.VOTE_COUNT_COL] = pd.to_numeric(items_to_consider[C.VOTE_COUNT_COL], errors='coerce').fillna(0)
+    items_to_consider[C.VOTE_AVERAGE_COL] = pd.to_numeric(items_to_consider[C.VOTE_AVERAGE_COL], errors='coerce').fillna(0)
+
+    items_to_consider = items_to_consider[items_to_consider[C.VOTE_AVERAGE_COL] >= min_vote_average_initial]
+    items_to_consider = items_to_consider[items_to_consider[C.VOTE_COUNT_COL] >= min_votes_initial]
+
     if items_to_consider.empty: return pd.DataFrame()
-    hidden_gems_df = items_to_consider.sort_values(by=[C.VOTE_COUNT_COL, C.VOTE_AVERAGE_COL], ascending=[True, False]).head(n)
+
+    # Étape 1: Sélectionner les 'num_novel_candidates' films les moins vus
+    novel_candidates_df = items_to_consider.sort_values(
+        by=[C.VOTE_COUNT_COL, C.VOTE_AVERAGE_COL],
+        ascending=[True, False]
+    ).head(num_novel_candidates)
+
+    if novel_candidates_df.empty: return pd.DataFrame()
+
+    # Étape 2: Parmi ces candidats "novelty", sélectionner les 'n' meilleurs en termes de note TMDB.
+    top_hidden_gems_df = novel_candidates_df.sort_values(
+        by=C.VOTE_AVERAGE_COL,
+        ascending=False
+    ).head(n)
+
     cols_out = [C.ITEM_ID_COL, C.LABEL_COL, C.GENRES_COL, C.RELEASE_YEAR_COL, C.VOTE_AVERAGE_COL, C.VOTE_COUNT_COL, C.TMDB_ID_COL]
-    return hidden_gems_df[[col for col in cols_out if col in hidden_gems_df.columns]]
+    return top_hidden_gems_df[[col for col in cols_out if col in top_hidden_gems_df.columns]]
 
 
 # --- Fonctions d'affichage des bandeaux (AVEC PAGINATION HORIZONTALE et couleur ROUGE VIF) ---
@@ -206,7 +243,7 @@ def display_movie_carousel(carousel_id, carousel_title, movies_df,
                 # Div principal de la carte avec style rouge vif
                 # Le contenu textuel est injecté, puis le selectbox est ajouté en dessous (hors du div principal stylisé, mais dans le même conteneur de carte)
                 st.markdown(
-                    f"<div style='background-color: #E50914; color: white; border-radius: 8px; "
+                    f"<div style='background-color: #CD5C5C; color: white; border-radius: 8px; "
                     f"padding: 15px; height: 300px; /* Hauteur pour le contenu textuel */ "
                     f"box-shadow: 3px 3px 8px rgba(0,0,0,0.4); overflow-y: auto; margin-bottom: 8px;'>"
                     f"{card_content_html}"
