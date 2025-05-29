@@ -486,3 +486,73 @@ class ContentBased(AlgoBase):
         min_rating, max_rating = self.trainset.rating_scale
         score = max(min_rating, min(max_rating, score))
         return score
+
+class CustomSurpriseAlgo(AlgoBase):
+    """
+    Algorithme flexible pour Surprise, permettant de choisir entre :
+    - 'knn_with_means'
+    - 'baseline'
+    - 'zscore'
+    - 'basic'
+    """
+    def __init__(self, mode='knn_with_means', k=40, min_k=1, sim_options=None, **kwargs):
+        AlgoBase.__init__(self)
+        self.mode = mode
+        self.k = k
+        self.min_k = min_k
+        self.sim_options = sim_options if sim_options is not None else {}
+        self.kwargs = kwargs
+
+    def fit(self, trainset):
+        AlgoBase.fit(self, trainset)
+        self.trainset = trainset
+
+        if self.mode == 'knn_with_means':
+            self.algo = KNNWithMeans(
+                k=self.k,
+                min_k=self.min_k,
+                sim_options=self.sim_options,
+                **self.kwargs
+            )
+            self.algo.fit(trainset)
+        elif self.mode == 'baseline':
+            self.global_mean = np.mean([r for (_, _, r) in self.trainset.all_ratings()])
+            self.user_means = {}
+            self.item_means = {}
+            for u in range(self.trainset.n_users):
+                ratings = [r for (_, r) in self.trainset.ur[u]]
+                self.user_means[u] = np.mean(ratings) if ratings else self.global_mean
+            for i in range(self.trainset.n_items):
+                ratings = [r for (_, r) in self.trainset.ir[i]]
+                self.item_means[i] = np.mean(ratings) if ratings else self.global_mean
+        elif self.mode == 'zscore':
+            self.user_means = {}
+            self.user_stds = {}
+            for u in range(self.trainset.n_users):
+                ratings = [r for (_, r) in self.trainset.ur[u]]
+                self.user_means[u] = np.mean(ratings) if ratings else 0
+                self.user_stds[u] = np.std(ratings) if ratings else 1
+        elif self.mode == 'basic':
+            self.global_mean = np.mean([r for (_, _, r) in self.trainset.all_ratings()])
+        else:
+            raise ValueError(f"Unknown mode: {self.mode}")
+        return self
+
+    def estimate(self, u, i):
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        if self.mode == 'knn_with_means':
+            return self.algo.estimate(u, i)
+        elif self.mode == 'baseline':
+            return (self.user_means[u] + self.item_means[i]) / 2
+        elif self.mode == 'zscore':
+            mean = self.user_means[u]
+            std = self.user_stds[u]
+            if std == 0:
+                return mean
+            return mean  # Peut être amélioré pour un vrai z-score
+        elif self.mode == 'basic':
+            return self.global_mean
+        else:
+            raise ValueError(f"Unknown mode: {self.mode}")
