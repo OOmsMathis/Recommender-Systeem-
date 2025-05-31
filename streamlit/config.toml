@@ -1,0 +1,6 @@
+[theme]
+primaryColor="#1E90FF" # A nice Dodger Blue for accents
+backgroundColor="#111111" # Very dark gray, almost black for main background
+secondaryBackgroundColor="#222222" # Dark gray for sidebar and some elements
+textColor="#E0E0E0" # Light gray for text, good contrast on dark
+font="sans serif" # You can try "Roboto", "Lato", "Open Sans" if installed or web-available 
