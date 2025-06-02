@@ -131,139 +131,101 @@ class ModelBaseline4(SVD):
 
 
 class UserBased(AlgoBase):
-    def __init__(self, k=3, min_k=1, sim_options={}, **kwargs):
+    def __init__(self, k=3, min_k=1, sim_options=None, **kwargs):
+        if sim_options is None:
+            sim_options = {"name": "spearman"}
         AlgoBase.__init__(self, sim_options=sim_options, **kwargs)
         self.k = k
         self.min_k = min_k
 
-        
     def fit(self, trainset):
         AlgoBase.fit(self, trainset)
-        
         self.compute_rating_matrix()
-        
         self.compute_similarity_matrix()
-        
         self.mean_ratings = []
         for u in range(self.trainset.n_users):
-            user_ratings = []
-            for (_, rating) in self.trainset.ur[u]: 
-                user_ratings.append(rating)
+            user_ratings = [rating for (_, rating) in self.trainset.ur[u]]
             if user_ratings:
                 mean_rating = np.mean(user_ratings)
             else:
-                mean_rating = float('nan')  
+                mean_rating = float('nan')
             self.mean_ratings.append(mean_rating)
 
-    
     def estimate(self, u, i):
-            if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
-                raise PredictionImpossible('User and/or item is unknown.') 
-            
-            estimate = self.mean_ratings[u]
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+        estimate = self.mean_ratings[u]
+        neighbors = []
+        for (v, rating) in self.trainset.ir[i]:
+            if v == u:
+                continue
+            sim_uv = self.sim[u, v]
+            if sim_uv > 0 and not np.isnan(self.ratings_matrix[v, i]):
+                mean_v = self.mean_ratings[v]
+                neighbors.append((sim_uv, rating - mean_v))
+        top_k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda x: x[0])
+        actual_k = 0
+        weighted_sum = 0.0
+        sum_sim = 0.0
+        for sim, rating_diff in top_k_neighbors:
+            if actual_k == self.k:
+                break
+            weighted_sum += sim * rating_diff
+            sum_sim += sim
+            actual_k += 1
+        if actual_k >= self.min_k and sum_sim > 0:
+            estimate += weighted_sum / sum_sim
+        return estimate
 
-            
-            neighbors = []
-            for (v, rating) in self.trainset.ir[i]:  
-                if v == u:
-                    continue  
-
-                sim_uv = self.sim[u, v] 
-
-                if sim_uv > 0 and not np.isnan(self.ratings_matrix[v, i]): 
-                    mean_v = self.mean_ratings[v]  
-                    neighbors.append((sim_uv, rating - mean_v))
-
-            
-            top_k_neighbors = heapq.nlargest(self.k, neighbors, key=lambda x: x[0])
-
-            
-            actual_k = 0
-            weighted_sum = 0.0
-            sum_sim = 0.0
-
-            for sim, rating_diff in top_k_neighbors:
-                if actual_k == self.k:
-                    break
-                weighted_sum += sim * rating_diff
-                sum_sim += sim
-                actual_k += 1
-
-            # Check
-            if actual_k >= self.min_k and sum_sim > 0:
-                estimate += weighted_sum / sum_sim
-
-            return estimate
-
-
-                            
     def compute_rating_matrix(self):
-        # -- implement here the compute_rating_matrix function --
         self.ratings_matrix = np.empty((self.trainset.n_users, self.trainset.n_items))
         self.ratings_matrix[:] = np.nan
-        for u in range(self.trainset.n_users): 
+        for u in range(self.trainset.n_users):
             for i, rating in self.trainset.ur[u]:
                 self.ratings_matrix[u, i] = rating
 
-    
     def compute_similarity_matrix(self):
         m = self.trainset.n_users
         ratings_matrix = self.ratings_matrix
         min_support = self.sim_options.get('min_support', 1)
-        sim_name = self.sim_options.get("name", "msd") 
-
-        # Similarity matrix
+        sim_name = self.sim_options.get("name", "spearman")
         self.sim = np.eye(m)
-
         for i in range(m):
-            for j in range(i + 1, m):  
+            for j in range(i + 1, m):
                 row_i = ratings_matrix[i]
                 row_j = ratings_matrix[j]
-
-                if sim_name == "jaccard":
-                    sim = self.jaccard_similarity(row_i, row_j)
-                    support = np.sum(~np.isnan(row_i) & ~np.isnan(row_j))
-                elif sim_name == "msd":
-                    diff = row_i - row_j
-                    support = np.sum(~np.isnan(diff))
-                    if support >= min_support:
-                        msd = np.nanmean((diff[~np.isnan(diff)]) ** 2)
-                        sim = 1 / (1 + msd)
-                    else:
-                        sim = 0
+                if sim_name == "spearman":
+                    sim, support = self.spearman_similarity(row_i, row_j)
                 else:
-                    
-                    diff = row_i - row_j
-                    support = np.sum(~np.isnan(diff))
-                    if support >= min_support:
-                        msd = np.nanmean((diff[~np.isnan(diff)]) ** 2)
-                        sim = 1 / (1 + msd)
-                    else:
-                        sim = 0
-
+                    sim, support = 0, 0
                 if support >= min_support:
                     self.sim[i, j] = sim
                     self.sim[j, i] = sim
 
-    def jaccard_similarity(self, row_i, row_j):
-        
-        mask_i = ~np.isnan(row_i)
-        mask_j = ~np.isnan(row_j)
-
-        intersection = np.sum(mask_i & mask_j)
-        union = np.sum(mask_i | mask_j)
-
-        if union == 0:
-            return 0.0
-        return intersection / union
+    def spearman_similarity(self, row_i, row_j):
+        mask = ~np.isnan(row_i) & ~np.isnan(row_j)
+        support = np.sum(mask)
+        if support < 2:
+            return 0.0, support
+        xi = row_i[mask]
+        xj = row_j[mask]
+        # Compute ranks
+        rank_i = pd.Series(xi).rank().values
+        rank_j = pd.Series(xj).rank().values
+        # Spearman correlation
+        num = np.sum((rank_i - rank_j) ** 2)
+        n = len(rank_i)
+        spearman = 1 - (6 * num) / (n * (n ** 2 - 1))
+        return spearman, support
 
 
 
 class ContentBased(AlgoBase):
-    def __init__(self, features_methods, regressor_method):
+    def __init__(self, features_methods, regressor_method, ridge_alpha=1.0):
         AlgoBase.__init__(self)
         self.features_methods = features_methods
         self.regressor_method = regressor_method
+        self.ridge_alpha = getattr(self, 'ridge_alpha', 1.0)
 
         # Les features de contenu sont créées ici sans précalcul
         self.content_features = self.create_content_features(self.features_methods)
@@ -477,9 +439,12 @@ class ContentBased(AlgoBase):
                 elif self.regressor_method == 'neural_network':
                     model = MLPRegressor(hidden_layer_sizes=(60, 60), max_iter=2500, learning_rate_init=0.01, alpha=0.0001, random_state=42)
                 elif self.regressor_method == 'decision_tree':
-                    model = DecisionTreeRegressor(max_depth=10, random_state=42)
+                    model = DecisionTreeRegressor(
+                        max_depth=getattr(self, 'decision_tree_max_depth', 10),
+                        random_state=getattr(self, 'decision_tree_random_state', 42)
+                    )
                 elif self.regressor_method == 'ridge':
-                    model = Ridge(alpha=0.15)
+                    model = Ridge(alpha=getattr(self, 'ridge_alpha', 1.0))
                 elif self.regressor_method == 'gradient_boosting':
                     model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
                 elif self.regressor_method == 'knn':
@@ -515,7 +480,7 @@ class ContentBased(AlgoBase):
         min_rating, max_rating = self.trainset.rating_scale
         score = max(min_rating, min(max_rating, score))
         return score
-
+    
 class CustomSurpriseAlgo(AlgoBase):
     """
     Algorithme flexible pour Surprise, permettant de choisir entre :
