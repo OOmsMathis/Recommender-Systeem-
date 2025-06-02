@@ -271,8 +271,12 @@ class UserBased(AlgoBase): # Inchangé
         AlgoBase.__init__(self)
         self.k, self.min_k, self.sim_options, self.verbose = k, min_k, sim_options, verbose
         self.knn = KNNWithMeans(k=self.k, min_k=self.min_k, sim_options=self.sim_options, verbose=self.verbose)
-    def fit(self, trainset): AlgoBase.fit(self, trainset); self.knn.fit(trainset); return self
-    def estimate(self, u, i): return self.knn.estimate(u, i)
+    def fit(self, trainset): 
+        AlgoBase.fit(self, trainset); 
+        self.knn.fit(trainset); 
+        return self
+    def estimate(self, u, i): 
+        return self.knn.estimate(u, i)
 
 class SVDAlgo(AlgoBase): # Inchangé
     def __init__(self, n_factors=100, n_epochs=20, biased=True, lr_all=0.005, reg_all=0.02, random_state=None, verbose=False):

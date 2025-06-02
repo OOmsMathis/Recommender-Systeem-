@@ -40,15 +40,15 @@ except Exception as e:
 
 # 1. SVDAlgo
 print("\n--- SVDAlgo ---")
-svd_model = SVDAlgo(n_factors=100, n_epochs=20, random_state=42, verbose=True) # Hyperparamètres par défaut
+svd_model = SVDAlgo(n_factors=100, n_epochs=30, lr_all=0.005, reg_all=0.03, random_state=42, verbose=True) 
 svd_model.fit(trainset_full)
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, 'svd_model_final.p'), algo=svd_model)
 print("SVDAlgo entraîné et sauvegardé.")
 
 # 2. UserBased
 print("\n--- UserBased ---")
-sim_method = 'msd'  # Change ici si tu veux tester d'autres méthodes de similarité
-user_based_model = UserBased(k=40, min_k=2, sim_options={'name': sim_method, 'user_based': True}, verbose=True)
+sim_method = 'pearson_baseline'  # Change ici pour tester d'autres méthodes de similarité si besoin
+user_based_model = UserBased(k=8, min_k=5, sim_options={'name': sim_method, 'user_based': True}, verbose=True)
 user_based_model.fit(trainset_full)
 user_based_filename = f"user_based_model_{sim_method}_final.p"
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, user_based_filename), algo=user_based_model)
@@ -59,14 +59,14 @@ print(f"UserBased entraîné et sauvegardé sous {user_based_filename}.")
 
 features = [
     #"title_length", 
-    #"Year_of_release", 
-    #"average_ratings", 
-    #"count_ratings", 
-    "Genre_binary", 
+    "Year_of_release", 
+    "average_ratings", 
+    "count_ratings", 
+    #"Genre_binary", 
     #"Genre_tfidf", 
-    "Tags_tfidf", 
+    #"Tags_tfidf", 
     #"tmdb_vote_average", 
-    "title_tfidf", 
+    #"title_tfidf", 
 ]
 regressor_method = 'ridge'  # Change ici pour tester d'autres régressseurs si besoin
 
