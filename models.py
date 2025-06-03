@@ -12,6 +12,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
+from surprise import SVDpp
 
 import constants as C_module
 C = C_module.Constant()
@@ -284,3 +285,7 @@ class SVDAlgo(AlgoBase): # Inchangé
         self.svd_model = SurpriseSVD(n_factors=n_factors, n_epochs=n_epochs, biased=biased, lr_all=lr_all, reg_all=reg_all, random_state=random_state, verbose=verbose)
     def fit(self, trainset): AlgoBase.fit(self, trainset); self.svd_model.fit(trainset); return self
     def estimate(self, u, i): return self.svd_model.estimate(u, i)
+
+class ModelSVDpp(SVDpp):
+    def __init__(self, n_factors=100, n_epochs=20, lr_all=0.005, reg_all=0.02, random_state=1, **kwargs):
+        super().__init__(n_factors=n_factors,n_epochs=n_epochs,lr_all=lr_all,reg_all=reg_all,random_state=random_state,**kwargs)
