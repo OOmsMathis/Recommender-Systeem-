@@ -13,6 +13,12 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.feature_extraction.text import TfidfVectorizer
 from surprise import SVDpp
+from sklearn.preprocessing import StandardScaler
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
 
 import constants as C_module
 C = C_module.Constant()
@@ -42,230 +48,265 @@ def get_top_n(predictions, n=10):
     return top_n_dict
 
 class ContentBased(AlgoBase):
-    def __init__(self, features_methods, regressor_method):
+    def __init__(self, features_methods, regressor_method, alpha=1.0):
         AlgoBase.__init__(self)
-        self.features_methods = features_methods if isinstance(features_methods, list) else [features_methods]
+        self.features_methods = features_methods
         self.regressor_method = regressor_method
-        self.content_features = None
-        self.user_models = {}
+        self.ridge_alpha = getattr(self, 'alpha', alpha)
 
-    def _normalize_column(self, series_in, fill_zero_with_mean=True):
-        series = series_in.squeeze().copy().astype(float)
-        if series.isnull().all(): return pd.Series(0, index=series.index, name=series.name)
-        
-        mean_val_fill = series.mean() 
-        series.fillna(mean_val_fill if not pd.isna(mean_val_fill) else 0, inplace=True)
+        # Les features de contenu sont créées ici sans précalcul
+        self.content_features = self.create_content_features(self.features_methods)
 
-        if fill_zero_with_mean:
-            non_zero_series = series[series != 0]
-            if not non_zero_series.empty:
-                mean_val_no_zeros = non_zero_series.mean()
-                if not pd.isna(mean_val_no_zeros):
-                    series = series.replace(0, mean_val_no_zeros)
-        
-        min_val, max_val = series.min(), series.max()
-        if max_val == min_val: return pd.Series(0.5 if min_val != 0 else 0, index=series.index, name=series.name)
-        return (series - min_val) / (max_val - min_val)
+    def create_content_features(self, features_methods):
+        """Content Analyzer: Crée les features de contenu pour les items sans précalcul."""
+        df_items = load_items()
+        df_ratings = load_ratings()
+        df_features = pd.DataFrame(index=df_items.index)
 
-    def create_content_features(self, features_methods_list):
-        item_id_col_name = getattr(C, 'ITEM_ID_COL', 'movieId')
-        if df_items_global.empty or item_id_col_name not in df_items_global.columns:
-            print(f"ContentBased: ERREUR - df_items_global est vide ou manque {item_id_col_name}. Aucune feature créée.")
-            return pd.DataFrame(index=df_items_global.index if item_id_col_name not in df_items_global.columns else pd.Index([]))
+        if features_methods is None:
+            return pd.DataFrame(index=df_items.index)
+        if isinstance(features_methods, str):
+            features_methods = [features_methods]
 
+        df_tmdb = None
+        if any(f.startswith('tmdb_') for f in features_methods):
+            tmdb_path = C.CONTENT_PATH / "tmdb_full_features.csv"
+            df_tmdb = pd.read_csv(tmdb_path).drop_duplicates('movieId').set_index('movieId')
+            if 'tmdb_profit' in features_methods:
+                df_tmdb['profit'] = df_tmdb['revenue'] - df_tmdb['budget']
 
-        try:
-            df_items_indexed = df_items_global.set_index(item_id_col_name)
-        except KeyError:
-            print(f"ContentBased: ERREUR - '{item_id_col_name}' non trouvé dans df_items_global pour indexation.")
-            return pd.DataFrame(index=df_items_global.index)
+        for feature_method in features_methods:
+            if feature_method == "title_length":
+                df_title_length = df_items[C.LABEL_COL].apply(lambda x: len(x)).to_frame('title_length')
+                df_title_length['title_length'] = df_title_length['title_length'].fillna(0).astype(int)
+                df_features = pd.concat([df_features, df_title_length], axis=1)
 
+            elif feature_method == "Year_of_release":
+                year = df_items[C.LABEL_COL].str.extract(r'\((\d{4})\)')[0].astype(float)
+                df_year = year.to_frame(name='year_of_release')
+                df_features = pd.concat([df_features, df_year], axis=1)
 
-        df_features = pd.DataFrame(index=df_items_indexed.index)
-        if not features_methods_list: return df_features
-        
-        # print(f"ContentBased: Création des features pour les méthodes: {features_methods_list}")
+            elif feature_method == "average_ratings":
+                average_rating = df_ratings.groupby('movieId')[C.RATING_COL].mean().rename('average_rating').to_frame()
+                df_features = df_features.join(average_rating, how='left')
 
-        for feature_method in features_methods_list:
-            current_feature_df_list = []
-            try:
-                if feature_method == "title_length":
-                    col = getattr(C, 'LABEL_COL', 'title')
-                    if col not in df_items_indexed.columns: print(f"CB: Col {col} manquante pour title_length"); continue
-                    series = df_items_indexed[col].fillna('').apply(lambda x: len(str(x)))
-                    current_feature_df_list.append(self._normalize_column(series, fill_zero_with_mean=False).to_frame('title_length'))
+            elif feature_method == "count_ratings":
+                rating_count = df_ratings.groupby('movieId')[C.RATING_COL].size().rename('rating_count').to_frame()
+                df_features = df_features.join(rating_count, how='left')
 
-                elif feature_method == "Year_of_release":
-                    col = getattr(C, 'RELEASE_YEAR_COL', 'release_year')
-                    if col not in df_items_indexed.columns: print(f"CB: Col {col} manquante pour Year_of_release"); continue
-                    current_feature_df_list.append(self._normalize_column(df_items_indexed[col].copy(), fill_zero_with_mean=True).to_frame('year_of_release'))
+            elif feature_method == "Genre_binary":
+                df_genre_list = df_items[C.GENRES_COL].str.split('|').explode().to_frame('genre_list')
+                df_dummies = pd.get_dummies(df_genre_list['genre_list'])
+                df_genres = df_dummies.groupby(df_genre_list.index).sum()
+                df_genres = df_genres.reindex(df_items.index).fillna(0).astype(int)
+                df_features = pd.concat([df_features, df_genres], axis=1)
 
-                elif feature_method == "average_ratings":
-                    rating_col, item_id_col = getattr(C, 'RATING_COL', 'rating'), getattr(C, 'ITEM_ID_COL', 'movieId')
-                    if df_ratings_global.empty or rating_col not in df_ratings_global or item_id_col not in df_ratings_global : print(f"CB: Données ratings manquantes pour average_ratings"); continue
-                    avg_rat = df_ratings_global.groupby(item_id_col)[rating_col].mean()
-                    glob_avg = df_ratings_global[rating_col].mean()
-                    series = avg_rat.reindex(df_items_indexed.index).fillna(glob_avg if not pd.isna(glob_avg) else 0)
-                    current_feature_df_list.append(self._normalize_column(series, fill_zero_with_mean=False).to_frame('average_ml_rating'))
-                
-                elif feature_method == "count_ratings":
-                    rating_col, item_id_col = getattr(C, 'RATING_COL', 'rating'), getattr(C, 'ITEM_ID_COL', 'movieId')
-                    if df_ratings_global.empty or rating_col not in df_ratings_global or item_id_col not in df_ratings_global: print(f"CB: Données ratings manquantes pour count_ratings"); continue
-                    count_rat = df_ratings_global.groupby(item_id_col)[rating_col].size()
-                    current_feature_df_list.append(self._normalize_column(count_rat.reindex(df_items_indexed.index), fill_zero_with_mean=True).to_frame('ml_rating_count'))
+            elif feature_method == "Genre_tfidf":
+                tfidf_vectorizer = TfidfVectorizer()
+                df_items['genre_string'] = df_items[C.GENRES_COL].fillna('').str.replace('|', ' ', regex=False)
+                tfidf_matrix = tfidf_vectorizer.fit_transform(df_items['genre_string'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf_vectorizer.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
 
-                elif feature_method == "Genre_binary":
-                    col = getattr(C, 'GENRES_COL', 'genres')
-                    if col not in df_items_indexed.columns: print(f"CB: Col {col} manquante pour Genre_binary"); continue
-                    genre_strings = df_items_indexed[col].fillna('').astype(str)
-                    s = genre_strings.str.split('|').explode()
-                    valid_genres = s[s.str.strip().ne('') & s.str.strip().ne('(no genres listed)')]
-                    if not valid_genres.empty:
-                        dummies = pd.get_dummies(valid_genres, prefix='genre')
-                        current_feature_df_list.append(dummies.groupby(dummies.index).sum().astype(int))
-                    else: print("CB: Aucun genre valide trouvé pour Genre_binary")
+            elif feature_method == "Tags_tfidf":
+                tags_path = C.CONTENT_PATH / "tags.csv"
+                df_tags_local = pd.read_csv(tags_path)
+                df_tags_local = df_tags_local.dropna(subset=['tag'])
+                df_tags_local['tag'] = df_tags_local['tag'].astype(str)
+                df_tags_grouped = df_tags_local.groupby('movieId')['tag'].agg(' '.join).to_frame('tags')
+                tfidf_vectorizer = TfidfVectorizer()
+                tfidf_matrix = tfidf_vectorizer.fit_transform(df_tags_grouped['tags'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tags_grouped.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
 
+            elif feature_method == "tmdb_vote_average":
+                df_tmdb_col = df_tmdb[['vote_average']].copy()
+                df_features = df_features.join(df_tmdb_col, how='left')
 
-                elif feature_method == "Tags_tfidf":
-                    tags_file = C.CONTENT_PATH / C.TAGS_FILENAME
-                    item_id_c, tag_c, user_id_c = getattr(C, 'ITEM_ID_COL', 'movieId'), getattr(C, 'TAG_COL', 'tag'), getattr(C, 'USER_ID_COL', 'userId')
-                    if not tags_file.is_file(): print(f"CB: Fichier tags {tags_file} non trouvé pour Tags_tfidf"); continue
-                    try:
-                        df_tags = pd.read_csv(tags_file)
-                        if not all(c in df_tags.columns for c in [item_id_c, tag_c, user_id_c]): print(f"CB: Colonnes manquantes dans tags.csv pour Tags_tfidf"); continue
-                        df_tags = df_tags.dropna(subset=[tag_c])
-                        df_tags[tag_c] = df_tags[tag_c].astype(str).str.lower()
-                        grouped_tags = df_tags.groupby(item_id_c)[tag_c].apply(lambda x: ' '.join(sorted(list(x.unique())))).to_frame('tags_combined')
-                        if not grouped_tags.empty and not grouped_tags['tags_combined'].str.strip().eq('').all():
-                            tfidf = TfidfVectorizer(max_features=100, stop_words='english')
-                            matrix = tfidf.fit_transform(grouped_tags['tags_combined'])
-                            current_feature_df_list.append(pd.DataFrame(matrix.toarray(), index=grouped_tags.index, columns=[f"tfidf_tag_{f}" for f in tfidf.get_feature_names_out()]))
-                        else: print("CB: Aucun tag combiné pour Tags_tfidf")
-                    except Exception as e_tag: print(f"ContentBased: Erreur Tags_tfidf: {e_tag}")
+            elif feature_method == "title_tfidf":
+                lemmatizer = WordNetLemmatizer()
+                stop_words = set(stopwords.words('english'))
+                df_items['title_string_processed'] = df_items[C.LABEL_COL].fillna('').apply(lambda x: ' '.join(
+                                lemmatizer.lemmatize(word) for word in x.split() if word.lower() not in stop_words
+                            ))
+                tfidf_vectorizer = TfidfVectorizer()
+                tfidf_matrix = tfidf_vectorizer.fit_transform(df_items['title_string_processed'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_items.index, columns=tfidf_vectorizer.get_feature_names_out())
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
 
-                elif feature_method == "tmdb_vote_average":
-                    col = getattr(C, 'VOTE_AVERAGE_COL', 'vote_average')
-                    if col not in df_items_indexed.columns: print(f"CB: Col {col} manquante pour tmdb_vote_average"); continue
-                    current_feature_df_list.append(self._normalize_column(df_items_indexed[col], fill_zero_with_mean=False).to_frame('tmdb_vote_average'))
+            elif feature_method == "genome_tags":
+                genome_tags_path = C.CONTENT_PATH / "genome-tags.csv"
+                genome_scores_path = C.CONTENT_PATH / "genome-scores.csv"
+                df_scores = pd.read_csv(genome_scores_path)
+                df_tags_g = pd.read_csv(genome_tags_path)
+                df_merged_g = df_scores.merge(df_tags_g, on='tagId')
+                df_genome_features = df_merged_g.pivot_table(index='movieId', columns='tag', values='relevance', fill_value=0)
+                df_genome_features = df_genome_features.reindex(df_items.index, fill_value=0)
+                # Genome features (relevance scores, not scaled)
+                df_features = pd.concat([df_features, df_genome_features], axis=1)
 
-                elif feature_method == "title_tfidf":
-                    col = getattr(C, 'LABEL_COL', 'title')
-                    if col not in df_items_indexed.columns: print(f"CB: Col {col} manquante pour title_tfidf"); continue
-                    try: 
-                        from nltk.corpus import stopwords; from nltk.stem import WordNetLemmatizer
-                        nltk.data.find('corpora/wordnet.zip'); nltk.data.find('corpora/stopwords.zip'); nltk.data.find('corpora/omw-1.4.zip')
-                    except LookupError: nltk.download(['wordnet', 'stopwords', 'omw-1.4'], quiet=True)
-                    
-                    lemmatizer, stop_words = WordNetLemmatizer(), set(stopwords.words('english'))
-                    processed_titles = df_items_indexed[col].fillna('').apply(lambda x: ' '.join(
-                        [lemmatizer.lemmatize(w) for w in nltk.word_tokenize(x.lower()) if w.isalpha() and w not in stop_words and len(w) > 1]))
-                    if not processed_titles.str.strip().eq('').all():
-                        tfidf = TfidfVectorizer(max_features=100)
-                        matrix = tfidf.fit_transform(processed_titles)
-                        current_feature_df_list.append(pd.DataFrame(matrix.toarray(), index=df_items_indexed.index, columns=[f"tfidf_title_{f}" for f in tfidf.get_feature_names_out()]))
-                    else: print("CB: Aucun titre traité pour title_tfidf")
-                else: 
-                    print(f"ContentBased: AVERTISSEMENT - Méthode de feature '{feature_method}' non implémentée ou ignorée.")
-                
-                for df_to_add in current_feature_df_list:
-                    if not df_to_add.empty: df_features = df_features.join(df_to_add, how='left')
-            except Exception as e_feat_proc: print(f"ContentBased: ERREUR feature '{feature_method}': {e_feat_proc}")
-        
-        df_features = df_features.loc[:,~df_features.columns.duplicated()].fillna(0)
-        if df_features.empty and len(features_methods_list) > 0 :
-            print(f"ContentBased: ATTENTION - DataFrame de features est vide alors que des méthodes étaient spécifiées: {features_methods_list}")
-        # print(f"ContentBased: Features créées, shape: {df_features.shape}.")
+            elif feature_method == "tfidf_relevance":
+                genome_tags_path = C.CONTENT_PATH / "genome-tags.csv"
+                genome_scores_path = C.CONTENT_PATH / "genome-scores.csv"
+                df_tags_g = pd.read_csv(genome_tags_path)
+                df_scores_g = pd.read_csv(genome_scores_path)
+                df_merged_g = df_scores_g.merge(df_tags_g, on='tagId')
+                df_merged_g['tag'] = df_merged_g['tag'].astype(str)
+                df_texts = df_merged_g.groupby('movieId')['tag'].apply(lambda x: ' '.join(x)).to_frame('tags')
+                tfidf_vectorizer = TfidfVectorizer()
+                tfidf_matrix = tfidf_vectorizer.fit_transform(df_texts['tags'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_texts.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
+                # StandardScaler sur les valeurs TF-IDF
+                scaler = StandardScaler()
+                tfidf_scaled = scaler.fit_transform(tfidf_df)
+                tfidf_scaled_df = pd.DataFrame(tfidf_scaled, index=tfidf_df.index, columns=tfidf_df.columns)
+                df_features = pd.concat([df_features, tfidf_scaled_df], axis=1)
+
+            elif feature_method == "tmdb_popularity":
+                df_tmdb_col = df_tmdb[['popularity']].copy()
+                scaler = StandardScaler()
+                df_tmdb_col['popularity'] = df_tmdb_col['popularity'].fillna(0)
+                df_tmdb_col['popularity_scaled'] = scaler.fit_transform(df_tmdb_col[['popularity']])
+                df_features = df_features.join(df_tmdb_col[['popularity_scaled']], how='left')
+
+            elif feature_method == "tmdb_budget":
+                df_tmdb_col = df_tmdb[['budget']].copy()
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['budget'] = df_tmdb_col['budget'].fillna(0)
+                df_tmdb_col['budget_scaled'] = scaler.fit_transform(df_tmdb_col[['budget']])
+                df_features = df_features.join(df_tmdb_col[['budget_scaled']], how='left')
+
+            elif feature_method == "tmdb_revenue":
+                df_tmdb_col = df_tmdb[['revenue']].copy()
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['revenue'] = df_tmdb_col['revenue'].fillna(0)
+                df_tmdb_col['revenue_scaled'] = scaler.fit_transform(df_tmdb_col[['revenue']])
+                df_features = df_features.join(df_tmdb_col[['revenue_scaled']], how='left')
+
+            elif feature_method == "tmdb_profit":
+                df_tmdb_col = df_tmdb[['profit']].copy()
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['profit'] = df_tmdb_col['profit'].fillna(0)
+                df_tmdb_col['profit_scaled'] = scaler.fit_transform(df_tmdb_col[['profit']])
+                df_features = df_features.join(df_tmdb_col[['profit_scaled']], how='left')
+
+            elif feature_method == "tmdb_runtime":
+                df_tmdb_col = df_tmdb[['runtime']].copy()
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['runtime'] = df_tmdb_col['runtime'].fillna(0)
+                df_tmdb_col['runtime_scaled'] = scaler.fit_transform(df_tmdb_col[['runtime']])
+                df_features = df_features.join(df_tmdb_col[['runtime_scaled']], how='left')
+
+            elif feature_method == "tmdb_vote_count":
+                df_tmdb_col = df_tmdb[['vote_count']].copy()
+                scaler = StandardScaler()
+                # Remplir les valeurs manquantes par 0 avant le scaling
+                df_tmdb_col['vote_count'] = df_tmdb_col['vote_count'].fillna(0)
+                df_tmdb_col['vote_count_scaled'] = scaler.fit_transform(df_tmdb_col[['vote_count']])
+                df_features = df_features.join(df_tmdb_col[['vote_count_scaled']], how='left')
+
+            elif feature_method == "tmdb_cast":
+                df_tmdb_col = df_tmdb[['cast']].copy()
+                df_tmdb_col['cast'] = df_tmdb_col['cast'].fillna('')
+                tfidf_vectorizer = TfidfVectorizer()
+                tfidf_matrix = tfidf_vectorizer.fit_transform(df_tmdb_col['cast'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb_col.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+
+            elif feature_method == "tmdb_director":
+                df_tmdb_col = df_tmdb[['director']].copy()
+                df_tmdb_col['director'] = df_tmdb_col['director'].fillna('')
+                tfidf_vectorizer = TfidfVectorizer()
+                tfidf_matrix = tfidf_vectorizer.fit_transform(df_tmdb_col['director'])
+                tfidf_df = pd.DataFrame(tfidf_matrix.toarray(), index=df_tmdb_col.index, columns=tfidf_vectorizer.get_feature_names_out())
+                tfidf_df = tfidf_df.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, tfidf_df], axis=1)
+
+            elif feature_method == "tmdb_original_language":
+                df_tmdb_col = df_tmdb[['original_language']].copy()
+                df_tmdb_col['original_language'] = df_tmdb_col['original_language'].fillna('unknown')
+                df_lang_dummies = pd.get_dummies(df_tmdb_col['original_language'], prefix='lang')
+                df_lang_dummies = df_lang_dummies.reindex(df_items.index, fill_value=0)
+                df_features = pd.concat([df_features, df_lang_dummies], axis=1)
+
+            else:
+                raise NotImplementedError(f'Feature method {feature_method} not yet implemented or misconfigured.')
+
+        df_features = df_features.fillna(0)
         return df_features
 
     def fit(self, trainset):
         AlgoBase.fit(self, trainset)
-        # print(f"ContentBased Fit: Début. Régresseur: {self.regressor_method}, Features: {self.features_methods}")
-        self.content_features = self.create_content_features(self.features_methods)
-        
-        if self.content_features is None or self.content_features.empty:
-            print("ContentBased Fit: ATTENTION - content_features vide après création. Aucun profil utilisateur appris.")
-            self.user_models = {u_inner_id: None for u_inner_id in self.trainset.all_users()}
-            return
+        self.user_profile = {u: None for u in trainset.all_users()}
+        for u in self.user_profile:
+            user_items = trainset.ur[u]
+            if len(user_items) > 0:
+                user_ratings = self.trainset.ur[u]
+                df_user = pd.DataFrame(user_ratings, columns=['inner_item_id', 'user_ratings'])
+                df_user["item_id"] = df_user["inner_item_id"].map(self.trainset.to_raw_iid)
+                df_user = df_user.merge(self.content_features, how='left', left_on='item_id', right_index=True)
+                feature_names = list(self.content_features.columns)
+                X = df_user[feature_names].values
+                y = df_user['user_ratings'].values
+                X = np.nan_to_num(X)
 
-        self.user_models = {}
-        for u_inner_id in self.trainset.all_users():
-            user_raw_id = self.trainset.to_raw_uid(u_inner_id)
-            user_ratings_inner = self.trainset.ur[u_inner_id]
-            
-            min_ratings_for_model = 3
-            if not user_ratings_inner or len(user_ratings_inner) < min_ratings_for_model:
-                self.user_models[u_inner_id] = None; continue
+                if self.regressor_method == 'linear':
+                    model = LinearRegression(fit_intercept=True)
+                elif self.regressor_method == 'lasso':
+                    model = Lasso(alpha=0.1)
+                elif self.regressor_method == 'random_forest':
+                    model = RandomForestRegressor(n_estimators=10, max_depth=10, random_state=42)
+                elif self.regressor_method == 'neural_network':
+                    model = MLPRegressor(hidden_layer_sizes=(60, 60), max_iter=2500, learning_rate_init=0.01, alpha=0.0001, random_state=42)
+                elif self.regressor_method == 'decision_tree':
+                    model = DecisionTreeRegressor(
+                        max_depth=getattr(self, 'decision_tree_max_depth', 10),
+                        random_state=getattr(self, 'decision_tree_random_state', 42)
+                    )
+                elif self.regressor_method == 'ridge':
+                    model = Ridge(alpha=getattr(self, 'ridge_alpha', 1.0))
+                elif self.regressor_method == 'gradient_boosting':
+                    model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=3, random_state=42)
+                elif self.regressor_method == 'knn':
+                    model = KNeighborsRegressor(n_neighbors=5)
+                elif self.regressor_method == 'elastic_net':
+                    model = ElasticNet(alpha=0.1, l1_ratio=0.5)
+                else:
+                    self.user_profile[u] = None
+                    continue
 
-            item_raw_ids = [self.trainset.to_raw_iid(inner_iid) for inner_iid, rating in user_ratings_inner]
-            ratings = np.array([rating for inner_iid, rating in user_ratings_inner])
-            
-            # S'assurer que self.content_features a un index avant de faire .reindex
-            if self.content_features.index.empty and item_raw_ids:
-                 print(f"ContentBased Fit: ATTENTION - L'index de content_features est vide pour user {user_raw_id}.")
-                 self.user_models[u_inner_id] = None; continue
-
-            user_item_features_df = self.content_features.reindex(item_raw_ids).fillna(0)
-            X = user_item_features_df.values
-            y = ratings
-
-            if X.shape[0] < min_ratings_for_model or X.shape[1] == 0 :
-                # print(f"ContentBased Fit: Matrice X ({X.shape}) inadéquate pour user {user_raw_id}.")
-                self.user_models[u_inner_id] = None; continue
-            
-            # if user_raw_id == -1: # DEBUG pour nouvel utilisateur
-            #     print(f"  DEBUG CB Fit (New User {user_raw_id}): X shape: {X.shape}, y shape: {y.shape}, y (ratings): {y}")
-            #     print(f"  DEBUG CB Fit (New User {user_raw_id}): user_item_features_df (head):\n{user_item_features_df.head()}")
-
-            model = None
-            if self.regressor_method == 'linear': model = LinearRegression(fit_intercept=True)
-            elif self.regressor_method == 'ridge': model = Ridge(alpha=1.0) 
-            elif self.regressor_method == 'lasso': model = Lasso(alpha=0.05)
-            else:
-                print(f"ContentBased Fit: ERREUR - Méthode de régression '{self.regressor_method}' non reconnue pour user {user_raw_id}.")
-                self.user_models[u_inner_id] = None; continue 
-            
-            try:
                 model.fit(X, y)
-                self.user_models[u_inner_id] = model
-                # if user_raw_id == -1 and hasattr(model, 'coef_'): 
-                #     print(f"  DEBUG CB Fit (New User {user_raw_id}): Modèle {self.regressor_method} entraîné. Coefs (10 premiers): {model.coef_[:10]}")
-            except Exception as e_fit_model:
-                print(f"ContentBased Fit: ERREUR pendant model.fit() pour user {user_raw_id} ({self.regressor_method}): {e_fit_model}")
-                self.user_models[u_inner_id] = None
-        
-        num_models_learned = len([m for m in self.user_models.values() if m is not None])
-        # print(f"ContentBased Fit: Terminé. {num_models_learned} modèles utilisateurs appris sur {self.trainset.n_users}.")
-        
-    def estimate(self, u_inner_id, i_inner_id):
-        user_raw_id = self.trainset.to_raw_uid(u_inner_id)
-        if not (self.trainset.knows_user(u_inner_id) and self.trainset.knows_item(i_inner_id)):
-            raise PredictionImpossible('User et/ou item inconnu.')
+                self.user_profile[u] = model
+            else:
+                self.user_profile[u] = None
 
-        user_model = self.user_models.get(u_inner_id)
-        
-        if user_model is None:
-            # if user_raw_id == -1: print(f"CB Estimate (New User {user_raw_id}): Pas de modèle perso. Retourne global_mean: {self.trainset.global_mean:.2f}")
+        return self
+
+    def estimate(self, u, i):
+        if not (self.trainset.knows_user(u) and self.trainset.knows_item(i)):
+            raise PredictionImpossible('User and/or item is unknown.')
+
+        if self.user_profile[u] is None:
             return self.trainset.global_mean
 
-        if self.content_features is None or self.content_features.empty:
-            # if user_raw_id == -1: print(f"CB Estimate (New User {user_raw_id}): content_features vide. Retourne global_mean.")
+        raw_item_id = self.trainset.to_raw_iid(i)
+        if raw_item_id in self.content_features.index:
+            item_features = self.content_features.loc[raw_item_id].values.reshape(1, -1)
+            item_features = np.nan_to_num(item_features)
+        else:
             return self.trainset.global_mean
 
-        raw_item_id = self.trainset.to_raw_iid(i_inner_id)
-        if raw_item_id not in self.content_features.index:
-            # if user_raw_id == -1: print(f"CB Estimate (New User {user_raw_id}): Item {raw_item_id} non trouvé dans CF. Retourne global_mean.")
-            return self.trainset.global_mean
-    
-        item_features_vector = self.content_features.loc[raw_item_id].values.reshape(1, -1)
-        item_features_vector = np.nan_to_num(item_features_vector)
-    
-        try:
-            score = user_model.predict(item_features_vector)[0]
-            # if user_raw_id == -1: print(f"  DEBUG CB Estimate (New User {user_raw_id}): Item {raw_item_id}, Score brut: {score:.2f}")
-            return np.clip(score, self.trainset.rating_scale[0], self.trainset.rating_scale[1])
-        except Exception:
-            # if user_raw_id == -1: print(f"CB Estimate (New User {user_raw_id}): Erreur user_model.predict pour Item {raw_item_id}. Retourne global_mean.")
-            return self.trainset.global_mean
+        score = self.user_profile[u].predict(item_features)[0]
+        min_rating, max_rating = self.trainset.rating_scale
+        score = max(min_rating, min(max_rating, score))
+        return score
 
 class UserBased(AlgoBase): # Inchangé
     def __init__(self, k=40, min_k=1, sim_options={'name': 'msd', 'user_based': True}, verbose=False):
