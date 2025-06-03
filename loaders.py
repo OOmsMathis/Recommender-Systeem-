@@ -266,6 +266,35 @@ def load_items():
         print(f"Une erreur inattendue est survenue dans load_items: {e}")
         raise
 
+def export_evaluation_report(df, model_name, accuracy=None, precision=None):
+    """
+    Export the evaluation report to the specified evaluation directory
+
+    """
+
+    today_str = datetime.now().strftime("%Y_%m_%d")
+    base_filename = f"evaluation_report_{today_str}"
+    i = 1
+    while True:
+        filename = f"{base_filename}_{i}.csv"
+        path = C.EVALUATION_PATH / filename
+        if not path.exists():
+            break
+        i += 1
+    df = df.copy()
+    # Insert model names as first column to keep track the model considered
+    df.insert(0, "name", model_name)
+
+    # Add accuracy and precision 
+    if accuracy is not None:
+        df["accuracy"] = accuracy
+    if precision is not None:
+        df["precision"] = precision
+    df.to_csv(path, index=False)
+    print(f"Evaluation report successfully exported to: {path}")
+
+
+
 if __name__ == '__main__':
     print("Test de chargement des items...")
     try:
