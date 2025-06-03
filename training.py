@@ -59,7 +59,7 @@ print(f"UserBased entraîné et sauvegardé sous {user_based_filename}.")
 print("\n--- ContentBased ---")
 features = [
     #"title_length", 
-    "Year_of_release", 
+    #"Year_of_release", 
     "average_ratings", 
     "count_ratings", 
     #"Genre_binary", 
@@ -67,12 +67,24 @@ features = [
     #"Tags_tfidf", 
     #"tmdb_vote_average", 
     #"title_tfidf", 
+    #"genome_tags",
+    #"tfidf_relevance",
+    #"tmdb_popularity",
+    #"tmdb_budget",
+    #"tmdb_revenue",
+    #"tmdb_runtime",
+    #"tmdb_vote_count",
+    #"tmdb_profit",
+    #"tmdb_cast", 
+    #"tmdb_director",
+    #"tmdb_original_language"
 ]
 regressor_method = 'ridge'  # Change ici pour tester d'autres régressseurs si besoin
 
 cb_model_all_features = ContentBased(
     features_methods=features,
-    regressor_method=regressor_method
+    regressor_method=regressor_method,
+    alpha=1.0
 )
 cb_model_all_features.fit(trainset_full)
 
