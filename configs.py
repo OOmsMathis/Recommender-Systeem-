@@ -5,11 +5,12 @@ from models import *
 
 class EvalConfig:  
   models = [
-    ("average_ratings_count_ratings_ridge", ContentBased, {
-      "features_methods": ["average_ratings", "count_ratings"],
-      "regressor_method": "ridge"
-      , "ridge_alpha": 1.0
-    })
+    ("SVD_PLUS", ModelBaseline5, {
+      "n_factors": 125,
+      "n_epochs": 40,
+      "lr_all": 0.005,
+      "reg_all": 0.02 }),
+
   ]
 
   split_metrics = ["mae", "rmse", "accuracy"]

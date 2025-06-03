@@ -32,6 +32,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.preprocessing import StandardScaler
+from surprise import SVDpp
 
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -128,6 +129,26 @@ class ModelBaseline4(SVD):
             random_state=random_state,
             **kwargs
         )
+
+        # Fifth algorithm: SVD++
+class ModelBaseline5(SVDpp):
+    def __init__(
+                self,
+                n_factors=100,
+                n_epochs=20,
+                lr_all=0.005,
+                reg_all=0.02,
+                random_state=1,
+                **kwargs
+        ):
+        super().__init__(
+                    n_factors=n_factors,
+                    n_epochs=n_epochs,
+                    lr_all=lr_all,
+                    reg_all=reg_all,
+                    random_state=random_state,
+                    **kwargs
+                )
 
 
 class UserBased(AlgoBase):
