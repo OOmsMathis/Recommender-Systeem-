@@ -5,7 +5,7 @@ from surprise import Dataset, Reader, dump
 import os
 import constants as C_module
 C = C_module.Constant() 
-from models import ContentBased, UserBased, SVDAlgo, df_ratings_global
+from models import ContentBased, UserBased, SVDAlgo, ModelSVDpp, df_ratings_global
 
 # --- Configuration ---
 # Le chemin des ratings est utilisé par Surprise pour créer le dataset.
@@ -40,15 +40,15 @@ except Exception as e:
 
 # 1. SVDAlgo
 print("\n--- SVDAlgo ---")
-svd_model = SVDAlgo(n_factors=100, n_epochs=30, lr_all=0.005, reg_all=0.03, random_state=42, verbose=True) 
+svd_model = SVDAlgo(n_factors=100, n_epochs=30, lr_all=0.005, reg_all=0.03, random_state=42, verbose=False) 
 svd_model.fit(trainset_full)
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, 'svd_model_final.p'), algo=svd_model)
-print("SVDAlgo entraîné et sauvegardé.")
+print(f"SVDAlgo entraîné et sauvegardé sous 'svd_model_final.p'")
 
 # 2. UserBased
 print("\n--- UserBased ---")
 sim_method = 'pearson_baseline'  # Change ici pour tester d'autres méthodes de similarité si besoin
-user_based_model = UserBased(k=8, min_k=5, sim_options={'name': sim_method, 'user_based': True}, verbose=True)
+user_based_model = UserBased(k=8, min_k=5, sim_options={'name': sim_method, 'user_based': True}, verbose=False)
 user_based_model.fit(trainset_full)
 user_based_filename = f"user_based_model_{sim_method}_final.p"
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, user_based_filename), algo=user_based_model)
@@ -56,7 +56,7 @@ print(f"UserBased entraîné et sauvegardé sous {user_based_filename}.")
 
 # 3. ContentBased
 #    Définis ici la liste des features que tu veux que ton ContentBased utilise.
-
+print("\n--- ContentBased ---")
 features = [
     #"title_length", 
     "Year_of_release", 
@@ -84,6 +84,32 @@ if not features_str:
 filename = f"content_based_{regressor_method}_final.p"
 dump.dump(os.path.join(OUTPUT_MODELS_DIR, filename), algo=cb_model_all_features)
 print(f"ContentBased ({regressor_method} avec {len(features)} types de features) entraîné et sauvegardé sous {filename}.")
+
+
+#4 SVD++ Global
+print("\n--- SVD++ Global ---")
+
+
+# Paramètres pour le modèle SVD++ global (ajustez selon vos besoins)
+svdpp_global_params = {
+    'n_factors': 50,       # Nombre de facteurs latents
+    'n_epochs': 25,        # Nombre d'époques d'entraînement
+    'lr_all': 0.007,       # Taux d'apprentissage global
+    'reg_all': 0.02,       # Terme de régularisation global
+    'random_state': 42,    # Pour la reproductibilité
+    'verbose': False,       # Afficher les logs d'entraînement
+    }
+
+
+global_svdpp_model = ModelSVDpp(**svdpp_global_params)
+global_svdpp_model.fit(trainset_full) # Entraîner sur l'ensemble des données
+
+# Sauvegarde du modèle SVD++ global
+svdpp_model_filename = 'svdpp_global_model.p'
+svdpp_model_path = os.path.join(OUTPUT_MODELS_DIR, svdpp_model_filename)
+dump.dump(str(svdpp_model_path), algo=global_svdpp_model)
+print(f"SVD++ global entrainé et sauvegardé sous {svdpp_model_filename}.")
+
 
 
 print(f"\n\nTous les modèles sélectionnés ont été entraînés et sauvegardés dans '{OUTPUT_MODELS_DIR}'")
