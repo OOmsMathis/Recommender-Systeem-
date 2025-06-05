@@ -1,3 +1,4 @@
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.p filter=lfs diff=lfs merge=lfs -text
 *..jpg filter=lfs diff=lfs merge=lfs -text
+C:/Users/Ooms[[:space:]]Mathis/Documents/mlsmm2156 filter=lfs diff=lfs merge=lfs -text
