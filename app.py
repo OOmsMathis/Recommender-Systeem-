@@ -30,13 +30,32 @@ st.set_page_config(page_title="Movie Recommendation", layout="wide")
 # ------------------------------------------------------- Configuration de la page Streamlit -------------------------------------------------------
 
 
-st.markdown("""
+# Ajoute un fond gris à la page principale
+st.markdown(
+    """
     <style>
-        .stApp {
-            background-color: #DDDDDD;
-        }
+    body, .stApp {
+        background-color: #f5f5f5;
+        background-image: url("https://www.transparenttextures.com/patterns/white-wall-3.png");
+        background-attachment: fixed;
+        background-size: auto;
+    }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Conteneur pour le bouton de retour à l'accueil ---
+# Utilisez des colonnes pour positionner le bouton à gauche
+# Centrer le bouton avec l'image demandée
+col_spacer_left, col_home_button, col_spacer_right = st.columns([0.01, 0.1, 0.01])
+with col_spacer_left:
+    if st.button(":material/house:", key="top_home_btn", use_container_width=True):
+        st.session_state.active_page = "general"
+        st.session_state.search_input_value = ""
+        st.session_state.active_search_query = ""
+        st.rerun()
+
 
 st.markdown(
     f"""
@@ -73,13 +92,12 @@ st.markdown(
         padding-left: 100%;
         animation: marquee 6s linear infinite;
         color: #FFFFFF;
-        font-size: 2.5em;
+        font-size: 3.5em;
         font-weight: 900;
-        font-family: 'Roboto', sans-serif;
-        text-shadow:
-            2px 2px 3px rgba(0,0,0,0.2),
-            -1px -1px 2px rgba(255,255,255,0.6);
-        line-height: 120px; /* Centre verticalement le texte */
+        letter-spacing: 2.5px;
+        font-family: 'Roboto', Arial, Helvetica, sans-serif;
+        text-shadow: 1px 1px 2px #F5CB5C, 0 2px 8px #fffbe6;
+        line-height: 120px;
     }}
     @keyframes marquee {{
         0%   {{ transform: translateX(0%); }}
@@ -275,29 +293,91 @@ def display_movie_carousel(carousel_id, carousel_title, movies_df,
     title_col_ratio = 0.80
     button_col_ratio = (1.0 - title_col_ratio) / 2
 
-    if total_pages > 1:
-        col_title, col_prev, col_next = st.columns([title_col_ratio, button_col_ratio, button_col_ratio])
-    else:
-        col_title = st
-        col_prev, col_next = None, None
-
-    with col_title:
-        st.markdown(f"<h3 style='color: #1E1E1E; margin-bottom: 10px;'>{carousel_title}</h3>", unsafe_allow_html=True)
-
-    if total_pages > 1 and col_prev is not None and col_next is not None:
-        with col_prev:
-            if st.button("⬅️", key=f"prev_{carousel_id}", use_container_width=True, disabled=(current_page == 0)):
-                st.session_state[f'{carousel_id}_page'] -= 1
-                st.rerun()
-        with col_next:
-            if st.button("➡️", key=f"next_{carousel_id}", use_container_width=True, disabled=(current_page >= total_pages - 1)):
-                st.session_state[f'{carousel_id}_page'] += 1
-                st.rerun()
-    elif col_prev is not None and col_next is not None:
-        with col_prev: st.empty()
-        with col_next: st.empty()
+    # Title only at the top
+    st.markdown(f"<h3 style='color: #1E1E1E; margin-bottom: 10px;'>{carousel_title}</h3>", unsafe_allow_html=True)
 
     # --- Custom CSS for poster hover effect and card layout ---
+    st.markdown("""
+    <style>
+    .movie-card-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        background: #232323; /* Foncé */
+        border-radius: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.13);
+        padding: 0.5rem 0.5rem 0.7rem 0.5rem;
+        margin-bottom: 0.5rem;
+        min-height: 410px;
+        max-width: 220px;
+        min-width: 180px;
+        height: 410px;
+        position: relative;
+        overflow: visible;
+    }
+    .movie-poster-hover {
+        width: 150px;
+        height: 225px;
+        object-fit: cover;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        transition: transform 0.25s cubic-bezier(.4,2,.6,1), box-shadow 0.25s;
+        margin-bottom: 0.5rem;
+        margin-top: 0.5rem;
+        background: #eaeaea;
+        display: block;
+    }
+    .movie-poster-hover:hover {
+        transform: scale(1.18);
+        z-index: 10;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    }
+    .movie-title-top {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #fff;
+        text-align: center;
+        margin-bottom: 0.2rem;
+        margin-top: 0.2rem;
+        min-height: 2.5em;
+        line-height: 1.2em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    .movie-info-bottom {
+        font-size: 0.98rem;
+        color: #ccc;
+        text-align: center;
+        margin-top: 0.3rem;
+        margin-bottom: 0.1rem;
+        min-height: 2.2em;
+    }
+    .movie-score-badge {
+        background: #ffe066;
+        color: #222;
+        border-radius: 8px;
+        padding: 0.15em 0.6em;
+        font-size: 1.05em;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 0.2em;
+    }
+    .movie-personal-score {
+        background: #d0f5e8;
+        color: #1a6c4e;
+        border-radius: 8px;
+        padding: 0.15em 0.6em;
+        font-size: 1.05em;
+        font-weight: 600;
+        display: inline-block;
+        margin-bottom: 0.2em;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     st.markdown("""
     <style>
     .movie-card-container {
@@ -460,6 +540,20 @@ def display_movie_carousel(carousel_id, carousel_title, movies_df,
                         elif movie_id_current in st.session_state.logged_in_user_ratings_buffer and user_rating_input is None:
                             del st.session_state.logged_in_user_ratings_buffer[movie_id_current]
 
+    # Pagination buttons at the bottom
+    if total_pages > 1:
+        col_title, col_prev, col_next = st.columns([title_col_ratio, button_col_ratio, button_col_ratio])
+        with col_prev:
+            if st.button(":material/arrow_back_ios:", key=f"prev_{carousel_id}", use_container_width=True, disabled=(current_page == 0)):
+                st.session_state[f'{carousel_id}_page'] -= 1
+                st.rerun()
+        with col_next:
+            if st.button(":material/arrow_forward_ios:", key=f"next_{carousel_id}", use_container_width=True, disabled=(current_page >= total_pages - 1)):
+                st.session_state[f'{carousel_id}_page'] += 1
+                st.rerun()
+    else:
+        st.markdown("<br>", unsafe_allow_html=True)
+
     st.markdown("<hr style='margin-top: 0.5rem; margin-bottom: 1rem;'>", unsafe_allow_html=True)
     
         
@@ -592,10 +686,10 @@ st.sidebar.markdown(
         50% { box-shadow: 0 0 12px 4px #F5CB5C99; border-color: #FFD700; }
     }
     .animated-header {
-        animation: zoomInOut 3s ease-in-out infinite;
+        animation: zoomInOut 2s ease-in-out infinite;
         font-weight: bold;
-        font-size: 1.25rem;
-        margin-bottom: 0.3rem;
+        font-size: 1.45rem;
+        margin-bottom: 0.5rem;
         color: #333533;
         text-align: center;
     }
@@ -710,64 +804,61 @@ if user_has_made_new_choice:
         if intended_page_from_choice != "search_results": st.session_state.search_input_value = ""; st.session_state.active_search_query = ""
         st.rerun()
         
-# Barre de recherche sur la page principale (repris de votre app(3).py)
-search_placeholder = st.empty()
+# --- MODIFIED: Search bar in the main page ---
+search_placeholder = st.empty() # Placeholder for the search bar container
+
 with search_placeholder.container():
+    # Only show search bar if not in new user profiling or instant recs page
     if st.session_state.active_page not in ["new_user_profiling", "new_user_instant_recs"]:
-        # Custom CSS for search box border and placeholder
+        # Custom CSS for search box border highlight
         st.markdown("""
         <style>
-        .custom-search-box input {
-            border: 10px solid #242423 !important;
-            border-radius: 8px !important;
-            padding: 8px 12px !important;
-            font-size: 1.08em !important;
+        .search-box-highlight input {
+            border: 10px solid #F5CB5C !important;
+            border-radius: 10px !important;
+            box-shadow: 0 0 0 2px #24242333;
+            background: #fffbe6 !important;
+            font-size: 1.1em;
         }
         </style>
         """, unsafe_allow_html=True)
         search_col_1, search_col_2, search_col_3 = st.columns([0.5, 0.6, 0.5])
         with search_col_2:
-            # Use label_visibility="collapsed" to hide label, set placeholder to "Search"
+            # Add a div with the custom class for the search box
+            st.markdown('<div class="search-box-highlight">', unsafe_allow_html=True)
             search_text_input_main = st.text_input(
-                label="Search", 
-                value=st.session_state.search_input_value, 
-                key="movie_search_main_key", 
+                "",
+                value=st.session_state.search_input_value,
+                key="movie_search_main_key",
                 help="Enter part of the title and press Enter.",
-                label_visibility="collapsed",
-                placeholder="Search"
+                placeholder="Search for a movie"
             )
-            # Add a custom class to the input box
-            st.markdown("""
-            <script>
-            const searchBox = window.parent.document.querySelector('input[data-testid="stTextInput"]');
-            if (searchBox) { searchBox.classList.add('custom-search-box'); }
-            </script>
-            """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
         if search_text_input_main != st.session_state.search_input_value:
             st.session_state.search_input_value = search_text_input_main
-            if not st.session_state.search_input_value and st.session_state.active_page == "search_results":
+
+            if st.session_state.search_input_value:
+                st.session_state.active_search_query = st.session_state.search_input_value
+                if st.session_state.active_page != "search_results":
+                    st.session_state.active_page = "search_results"
+                st.rerun()
+            elif not st.session_state.search_input_value and st.session_state.active_page == "search_results":
                 st.session_state.active_search_query = ""
-                current_selection = st.session_state.get('last_processed_selectbox_selection', "Explore Movies")
-                if current_selection == "Explore Movies": st.session_state.active_page = "general"
-                # MODIFICATION ICI: Référence au nouveau nom
-                elif current_selection == "Log In": st.session_state.active_page = "user_specific" # ANCIEN: "Log In (Existing Profile)"
-                elif current_selection == "Create New Profile": st.session_state.active_page = "new_user_profiling"
-                else: st.session_state.active_page = "general"
+                current_radio_selection = st.session_state.get('last_processed_radio_selection', "Explore Movies")
+                if current_radio_selection == "Explore Movies":
+                    st.session_state.active_page = "general"
+                elif current_radio_selection == "Log In (Existing Profile)":
+                    st.session_state.active_page = "user_specific"
+                elif current_radio_selection == "Create New Profile":
+                    st.session_state.active_page = "new_user_profiling"
+                else:
+                    st.session_state.active_page = "general"
                 st.rerun()
         st.markdown(
-            """
-            <style>
-            .custom-search-box input {
-            border: 20px solid #242423 !important;  /* Augmente légèrement l'épaisseur de la bordure */
-            border-radius: 15px !important;
-            padding: 8px 12px !important;
-            font-size: 1.08em !important;
-            }
-            </style>
-            """,
+            "<hr style='border-top: 3px solid #242423; margin-top: 1.5rem; margin-bottom: 1.5rem;'>",
             unsafe_allow_html=True
         )
-        st.markdown("---")
 
 # --- MODIFIED SECTION (Gestion de la sélection d'ID de profil) ---
 uid_for_reco = None
@@ -783,18 +874,22 @@ if st.session_state.active_page == "user_specific":
                     user_profiles_map = pd.Series(df_profiles.userName.values, index=df_profiles.userId).to_dict()
             except Exception as e_pf: print(f"Error loading user_profiles.csv: {e_pf}")
 
-        # MODIFICATION ICI: La fonction format_func pour afficher le nom si disponible, sinon "User (ID: ...)"
-        disp_opts_func = lambda uid_val: f"{user_profiles_map.get(uid_val, 'User')} (ID: {uid_val})"
+        def disp_opts_func(uid_val):
+            user_name = user_profiles_map.get(uid_val)
+            if user_name:
+                return f"ID {uid_val} - {user_name}"
+            else:
+                return f"ID {uid_val}"
 
         uids_from_ratings = df_ratings_global_app[C.USER_ID_COL].unique()
         user_sort_list = []
         for uid_val_loop in uids_from_ratings:
             actual_name = user_profiles_map.get(uid_val_loop)
             has_profile_name_sort_key = 0 if actual_name else 1
-            display_name_for_sort = f"{actual_name if actual_name else 'User'} (ID: {uid_val_loop})"
-            user_sort_list.append({'uid': uid_val_loop, 'sort_key': has_profile_name_sort_key, 'display_text': display_name_for_sort})
+            # display_name_for_sort = f"{actual_name if actual_name else 'User'} (ID: {uid_val_loop})" # Plus nécessaire pour l'affichage, mais peut rester pour le tri
+            user_sort_list.append({'uid': uid_val_loop, 'sort_key': has_profile_name_sort_key, 'display_text': str(uid_val_loop)}) # Utilise l'ID pour le tri si pas de nom
 
-        # Tri par clé de tri (profil nommé ou non) puis par texte affiché
+        # Tri par clé de tri (profil nommé ou non) puis par texte affiché (l'ID dans ce cas)
         user_sort_list.sort(key=lambda x: (x['sort_key'], x['display_text']))
         uids_avail = [user['uid'] for user in user_sort_list]
 
@@ -803,47 +898,52 @@ if st.session_state.active_page == "user_specific":
             if current_selection_uid not in uids_avail:
                 current_selection_uid = uids_avail[0]
                 st.session_state.current_user_id = current_selection_uid
-                idx_sel_box = uids_avail.index(current_selection_uid)
+            idx_sel_box = uids_avail.index(current_selection_uid)
 
             # --- DÉBUT DES MODIFICATIONS POUR LA BARRE DE RECHERCHE D'ID ---
             st.sidebar.markdown("---") # Séparateur pour la clarté
 
             # Input de recherche pour l'ID
             search_uid_query = st.sidebar.text_input(
-                "Search User ID:", # Nouveau label
+                "Search User ID or Name:", # Nouveau label
                 value=st.session_state.get('search_uid_input', ''),
                 key="search_uid_input_key"
             )
 
-            # Filtrer les UIDs disponibles en fonction de la recherche
-            filtered_uids_avail = uids_avail
+            # Filtrer les UIDs disponibles en fonction de la recherche (ID ou nom)
+            filtered_uids_avail = []
             if search_uid_query:
-                try:
-                    # Tente de convertir la recherche en int si possible pour la recherche numérique
-                    search_id_int = int(search_uid_query)
-                    filtered_uids_avail = [uid for uid in uids_avail if str(search_id_int) in str(uid)]
-                except ValueError:
-                    # Si ce n'est pas un nombre, ne filtre pas (ou implémentez une recherche de nom si userName est affiché)
-                    pass # La recherche par nom n'est pas demandée, donc on laisse passer
+                query_lower = search_uid_query.lower()
+                for uid in uids_avail:
+                    # Recherche par ID (partielle)
+                    if query_lower in str(uid).lower():
+                        filtered_uids_avail.append(uid)
+                    else:
+                        # Recherche par nom (partielle et insensible à la casse)
+                        user_name = user_profiles_map.get(uid)
+                        if user_name and query_lower in user_name.lower():
+                            filtered_uids_avail.append(uid)
+            else:
+                filtered_uids_avail = uids_avail  # Si la recherche est vide, affiche tous les UIDs
 
             # Assurez-vous que la sélection actuelle est toujours dans les options filtrées, sinon réinitialisez
             if current_selection_uid not in filtered_uids_avail and filtered_uids_avail:
-                current_selection_uid = filtered_uids_avail[0] # Sélectionne le premier ID filtré
+                current_selection_uid = filtered_uids_avail[0]  # Sélectionne le premier ID filtré
                 st.session_state.current_user_id = current_selection_uid
-                st.session_state.last_selected_user_id = current_selection_uid # Mise à jour
-                st.rerun() # Pour refléter le changement de sélection
+                st.session_state.last_selected_user_id = current_selection_uid  # Mise à jour
+                st.rerun()  # Pour refléter le changement de sélection
 
             # Déterminer l'index pour le selectbox filtré
             idx_sel_box_filtered = filtered_uids_avail.index(current_selection_uid) if current_selection_uid in filtered_uids_avail else 0
-            if not filtered_uids_avail: # Si aucun ID ne correspond au filtre
-                st.sidebar.warning("No matching User ID found.")
+            if not filtered_uids_avail:  # Si aucun ID ne correspond au filtre
+                st.sidebar.warning("No matching User ID or Name found.")
                 uid_sel_box_val = None
             else:
                 uid_sel_box_val = st.sidebar.selectbox(
-                    f"Select ID:", # Nouveau label
-                    options=filtered_uids_avail, # Utilisez la liste filtrée
-                    format_func=disp_opts_func, # Pour n'afficher que l'ID
-                    index=idx_sel_box_filtered, # Index pour la liste filtrée
+                    f"Select ID:",
+                    options=filtered_uids_avail,  # Utilisez la liste filtrée
+                    format_func=disp_opts_func,  # C'est ici que nous utilisons la fonction modifiée
+                    index=idx_sel_box_filtered,  # Index pour la liste filtrée
                     key="uid_sel_box"
                 )
             # --- FIN DES MODIFICATIONS POUR LA BARRE DE RECHERCHE D'ID ---
@@ -857,8 +957,8 @@ if st.session_state.active_page == "user_specific":
             st.sidebar.warning("No user ratings available to select a profile.")
             uid_for_reco = None
     elif st.session_state.current_user_id not in [None, "new_user_temp"]:
-        uid_for_reco = st.session_state.current_user_id
-        
+            uid_for_reco = st.session_state.current_user_id
+                    
 # --- User profile inference function (Fold-in) ---
 def infer_new_user_profile(new_ratings_dict, model, n_epochs=10, lr=0.005, reg=0.02): #
     """
@@ -912,7 +1012,7 @@ if st.session_state.active_page == "general": #
     top_tmdb_movies = get_top_overall_movies_tmdb(genre_filter=genre_f_general, year_min_filter=yr_min, year_max_filter=yr_max) #
     st.markdown(
         """
-        <div style='text-align: center; font-size: 3.5em; font-weight: 900; letter-spacing: 1.5px; color: #222; margin-bottom: 18px; margin-top: -20px; text-shadow: 1px 1px 2px #F5CB5C, 0 2px 8px #fffbe6'>
+        <div style='text-align: center; font-size: 3.5em; font-weight: 900; letter-spacing: 1.5px; color: #222; margin-bottom: 18px; margin-top: -20px; text-shadow: 1px 1px 2px #F5CB5C, 0 2px 8px #fffbe6;'>
             Our recommendations and discoveries
         </div>
         """,
@@ -923,16 +1023,16 @@ if st.session_state.active_page == "general": #
 
 
 
-    display_movie_carousel("top_documentaries", "Documentaries to watch", top_documentaries) # changed "Documentaires Incontournables"
+    display_movie_carousel("top_documentaries", "Must-Watch Documentaries", top_documentaries) # changed "Documentaires Incontournables"
     hidden_gems = get_hidden_gems_movies(genre_filter=genre_f_general, year_min_filter=yr_min, year_max_filter=yr_max) #
 
 
 
-    display_movie_carousel("hidden_gems", f"💎 Hidden Gems{genre_suffix}", hidden_gems) # changed "Pépites Cachées"
+    display_movie_carousel("Quiet Masterpieces", f"Quiet Masterpieces{genre_suffix}", hidden_gems) # changed "Pépites Cachées"
 
 elif st.session_state.active_page == "user_specific" and uid_for_reco is not None: #
     user_display_name_map_val = user_profiles_map.get(uid_for_reco, f"User {uid_for_reco}") # changed "Utilisateur"
-    st.markdown(f"<h2 style='text-decoration: underline;'>Recommendations For You, {user_display_name_map_val}</h2>", unsafe_allow_html=True)
+    st.header(f"Recommendations For You : {user_display_name_map_val}") # changed "Recommandations Pour Vous,"
     yr_min_p, yr_max_p = selected_year_range_sidebar[0], selected_year_range_sidebar[1] #
     genre_f_perso = selected_genre_sidebar if selected_genre_sidebar != "All Genres" else None # changed "Tous les genres"
     models_p_dir = str(C.DATA_PATH / 'recs') # Path to pre-calculated models for existing users #
@@ -957,16 +1057,38 @@ elif st.session_state.active_page == "user_specific" and uid_for_reco is not Non
                 if model_key == "content_based": #
                     if user_profile_for_titles: #
                         anchor_movie = user_profile_for_titles[0] #
-                        carousel_title_final = f"<u>Because you liked {anchor_movie['title']} ({anchor_movie['rating']:.1f}/5):</u>" # Underlined
+                        carousel_title_final = f"""<span style="font-family: 'Poppins', cursive; font-size:0.8em;">Because you liked {anchor_movie['title']} ({anchor_movie['rating']:.1f}/5):</span>""" # Poppins font, reduced size
+
+                        # Inject Google Fonts Poppins if not already present
+                        st.markdown("""
+                        <link href="https://fonts.googleapis.com/css?family=Poppins&display=swap" rel="stylesheet">
+                        <style>
+                        .poppins-font {
+                            font-family: 'Poppins', cursive !important;
+                            font-size: 0.6em !important;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
                 elif model_key == "user_based": #
                     if len(user_profile_for_titles) >= 2: #
                         movie1, movie2 = user_profile_for_titles[0], user_profile_for_titles[1] #
-                        carousel_title_final = f"<u>Fans of {movie1['title']} and {movie2['title']} also enjoy:</u>" # Underlined
+                        carousel_title_final = f"<span style='font-family: Poppins, cursive; font-size:0.8em;'>Fans of {movie1['title']} and {movie2['title']} also enjoy:</span>" #
                     elif len(user_profile_for_titles) == 1: #
                         movie1 = user_profile_for_titles[0] #
-                        carousel_title_final = f"<u>Fans of {movie1['title']} ({movie1['rating']:.1f}/5) also enjoy:</u>" # Underlined
+                        carousel_title_final = f"<span style='font-family: Poppins, cursive; font-size:0.8em;'>Fans of {movie1['title']} ({movie1['rating']:.1f}/5) also enjoy:</span>" #
                 elif model_key == "svd": #
-                    carousel_title_final = "<u>Based on your overall behavior...</u>" # Underlined
+                    carousel_title_final = f"""<span style="font-family: 'Poppins', cursive; font-size:0.8em;">Based on your overall behavior...</span>"""  # Poppins font, reduced size
+
+                    # Inject Google Fonts Poppins if not already present
+                    st.markdown("""
+                    <link href="https://fonts.googleapis.com/css?family=Poppins&display=swap" rel="stylesheet">
+                    <style>
+                    .poppins-font {
+                        font-family: 'Poppins', cursive !important;
+                        font-size: 0.6em !important;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
                 carousel_id_perso = f"{model_key}_{str(uid_for_reco).replace('.', '_')}" #
                 display_movie_carousel(
                     carousel_id_perso, carousel_title_final, recs_data,
@@ -1002,10 +1124,43 @@ elif st.session_state.active_page == "user_specific" and uid_for_reco is not Non
 
 elif st.session_state.active_page == "new_user_profiling": #
     search_placeholder.empty() #
-    st.header("<u>👤 Create Your Taste Profile</u>", unsafe_allow_html=True) # Underlined
+    st.markdown("""
+        <style>
+        @keyframes zoomInOut {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.12); }
+        }
+        .animated-create-profile-header {
+            animation: zoomInOut 2.2s ease-in-out infinite;
+            font-family: 'Poppins', sans-serif !important;
+            font-size: 2.5em !important;
+            font-weight: 900;
+            color: #222;
+            text-align: center;
+            margin-bottom: 1.0em;
+            margin-top: 0.2em;
+            letter-spacing: 1.5px;
+        }
+        </style>
+        <link href="https://fonts.googleapis.com/css?family=Poppins:700&display=swap" rel="stylesheet">
+        <div class="animated-create-profile-header">Create Your Profile Here !</div>
+    """, unsafe_allow_html=True)
     st.write("To help us understand your preferences, please enter your name and rate some movies.") # changed "Pour nous aider à comprendre vos préférences, veuillez entrer votre nom et noter quelques films."
-    new_user_name = st.text_input("What is your name?", st.session_state.get('new_user_name_input', '')) # changed "Quel est votre nom ?"
-    st.session_state.new_user_name_input = new_user_name #
+    # Réduit la taille de la boîte de saisie du nom avec du CSS personnalisé
+    st.markdown("""
+        <style>
+        .small-name-input input {
+            width: 220px !important;
+            font-size: 1em !important;
+            padding: 6px 8px !important;
+            border-radius: 7px !important;
+        }
+        </style>
+        <div class="small-name-input">
+    """, unsafe_allow_html=True)
+    new_user_name = st.text_input("What is your name ?", st.session_state.get('new_user_name_input', ''), key="new_user_name_input_box")
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.session_state.new_user_name_input = new_user_name
 
     # Movie selection logic for profiling (unchanged)
     movies_for_profiling_pool_initial = df_items_global_app.copy() if not df_items_global_app.empty else pd.DataFrame() #
@@ -1162,8 +1317,31 @@ elif st.session_state.active_page == "new_user_profiling": #
 
 elif st.session_state.active_page == "new_user_instant_recs": #
     search_placeholder.empty() #
-    st.header("🎉 Your First Movie Suggestions!") # changed "Vos Premières Suggestions de Films !"
-    st.caption("Based on the ratings you just provided.") # changed "Basées sur les notes que vous venez de fournir."
+    st.markdown("""
+        <style>
+        @keyframes zoomInOut {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.18); }
+        }
+        .animated-instant-recs-header {
+            animation: zoomInOut 2.2s ease-in-out infinite;
+            font-family: 'Poppins', sans-serif !important;
+            font-size: 3.2em !important;
+            font-weight: 900;
+            color: #222;
+            text-align: center;
+            margin-bottom: 1.0em;
+            margin-top: 0.2em;
+            letter-spacing: 1.5px;
+        }
+        </style>
+        <link href="https://fonts.googleapis.com/css?family=Poppins:700&display=swap" rel="stylesheet">
+        <div class="animated-instant-recs-header">Your First Movie Suggestions Just Here !</div>
+    """, unsafe_allow_html=True)
+    st.markdown(
+        "<span style='font-family: Poppins, sans-serif; font-weight: bold; font-size: 1.15em;'>Based on the ratings you just provided.</span>",
+        unsafe_allow_html=True
+    )
 
     pu_new = st.session_state.get('new_user_inferred_factors') #
     bu_new = st.session_state.get('new_user_inferred_bias') #
@@ -1248,7 +1426,7 @@ elif st.session_state.active_page == "new_user_instant_recs": #
 
 elif st.session_state.active_page == "search_results": # Search section (unchanged) #
     query = st.session_state.active_search_query #
-    st.header(f"🎬 Search Results for: \"{query}\"") # changed "Résultats de Recherche pour :"
+    st.header(f"Search Results for : \"{query}\"") # changed "Résultats de Recherche pour :"
     if not query: #
         st.warning("Please enter a term in the search bar above.") # changed "Veuillez entrer un terme dans la barre de recherche ci-dessus."
         if st.button("Back to Home"): # changed "Retour à l'Accueil"
@@ -1258,66 +1436,104 @@ elif st.session_state.active_page == "search_results": # Search section (unchang
         if results_df.empty: st.info(f"No movies found containing \"{query}\".") # changed "Aucun film trouvé contenant ..."
         else:
             st.markdown(f"**{len(results_df)} movie(s) found:**") # changed "film(s) trouvé(s) :"
-            for _, movie_data in results_df.iterrows(): #
-                movie_id = movie_data[C.ITEM_ID_COL]; title = movie_data[C.LABEL_COL] #
-                genres_text_search = str(movie_data.get(C.GENRES_COL, "N/A")).replace('|', ', ') #
-                year_val = movie_data.get(C.RELEASE_YEAR_COL) #
-                year_display = int(year_val) if pd.notna(year_val) and year_val != 0 else "N/A" #
-                with st.container(border=True): #
-                    cols_info, cols_rating_form = st.columns([0.6, 0.4]) #
-                    with cols_info: #
-                        st.subheader(f"{title}") #
-                        st.caption(f"Genres: {genres_text_search} | Year: {year_display}") # changed "Année:"
-                        tmdb_id_val = movie_data.get(C.TMDB_ID_COL) #
-                        if pd.notna(tmdb_id_val): #
-                            try:
-                                title_link = f"https://www.themoviedb.org/movie/{int(tmdb_id_val)}" #
-                                st.markdown(f"<a href='{title_link}' target='_blank' style='font-size:0.9em;'>View on TMDB 🔗</a>", unsafe_allow_html=True) # changed "Voir sur TMDB 🔗"
-                            except ValueError: pass #
-                    with cols_rating_form: # Rating logic in search (unchanged) #
-                        st.markdown("##### Rate this movie:") # changed "Noter ce film :"
-                        rating_key_sr = f"search_rating_{movie_id}_{re.sub(r'[^a-zA-Z0-9]', '', query)}" #
-                        userid_key_sr = f"search_userid_{movie_id}_{re.sub(r'[^a-zA-Z0-9]', '', query)}" #
-                        button_key_sr = f"search_save_{movie_id}_{re.sub(r'[^a-zA-Z0-9]', '', query)}" #
-                        rating_opts_sr = [None, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0] #
-                        fmt_fn_sr = lambda x: "Rate" if x is None else f"{x} ★" # changed "Noter"
-                        selected_rating_sr = st.selectbox("Your rating:", options=rating_opts_sr, index=0, format_func=fmt_fn_sr, key=rating_key_sr, label_visibility="collapsed") # changed "Votre note :"
-                        user_id_for_rating_sr = None #
-                        current_session_user_id_sr = st.session_state.get('current_user_id') #
-                        is_user_identified = current_session_user_id_sr and current_session_user_id_sr != "new_user_temp" and \
-                                             (st.session_state.active_page == "user_specific" or st.session_state.get('last_processed_radio_selection') == "Log In (Existing Profile)" or \
-                                              (st.session_state.get('new_user_id_generated') is not None and st.session_state.new_user_id_generated == current_session_user_id_sr)) # "Se Connecter (Profil Existant)" would be from sidebar variable
-                        if is_user_identified: #
-                            st.caption(f"As User ID: {current_session_user_id_sr}") # changed "En tant qu'ID Utilisateur :"
-                            user_id_for_rating_sr = current_session_user_id_sr #
-                        else:
-                            st.caption("Log in or create a profile to save ratings easily, or enter your User ID manually.") # changed "Connectez-vous ou créez un profil pour enregistrer facilement les notes, ou entrez votre ID Utilisateur manuellement."
-                            user_id_for_rating_input_val_sr = st.text_input("Your User ID (if known):", key=userid_key_sr, help="Enter your User ID (numeric) to save the rating.") # changed "Votre ID Utilisateur (si connu) :" and help text
-                            if user_id_for_rating_input_val_sr: user_id_for_rating_sr = user_id_for_rating_input_val_sr.strip() #
-                        if st.button("💾 Save", key=button_key_sr, use_container_width=True): # changed "Enregistrer"
-                            if selected_rating_sr is None: st.warning("Please select a rating.", icon="⚠️") # changed "Veuillez sélectionner une note."
-                            elif not user_id_for_rating_sr: st.warning("Please provide a User ID or log in.", icon="⚠️") # changed "Veuillez fournir un ID Utilisateur ou vous connecter."
-                            else:
-                                try: # ... (saving code unchanged) ...
-                                    user_id_to_save_sr = int(user_id_for_rating_sr) #
-                                    rating_to_save_single_sr = { C.USER_ID_COL: user_id_to_save_sr, C.ITEM_ID_COL: movie_id, C.RATING_COL: selected_rating_sr, C.TIMESTAMP_COL: int(time.time()) } #
-                                    df_single_rating_sr = pd.DataFrame([rating_to_save_single_sr]) #
-                                    pending_ratings_filepath_sr = C.EVIDENCE_PATH / getattr(C, 'NEW_RATINGS_PENDING_FILENAME', 'new_ratings_pending.csv') #
-                                    file_exists_sr = os.path.exists(pending_ratings_filepath_sr) #
-                                    df_single_rating_sr.to_csv(pending_ratings_filepath_sr, mode='a', header=not file_exists_sr, index=False) #
-                                    st.success(f"Rating ({selected_rating_sr}★) for '{title}' (User ID: {user_id_to_save_sr}) saved!") # changed "Note (...) pour ... (ID Utilisateur : ...) enregistrée !"
-                                except ValueError: st.error("User ID must be an integer.", icon="❌") # changed "L'ID Utilisateur doit être un entier."
-                                except Exception as e_save_sr: st.error(f"Saving error: {e_save_sr}", icon="❌") # changed "Erreur d'enregistrement :"
-                st.markdown("---") #
-else:
-    search_placeholder.empty() #
-    valid_pages = ["general", "user_specific", "new_user_profiling", "new_user_instant_recs", "search_results"] #
-    if st.session_state.active_page not in valid_pages: #
-        st.session_state.active_page = "general" #
-        st.session_state.search_input_value = "" #
-        st.session_state.active_search_query = "" #
-        st.rerun() #
+            for _, movie_data in results_df.iterrows():
+                movie_id = movie_data[C.ITEM_ID_COL]; title = movie_data[C.LABEL_COL]
+                genres_text_search = str(movie_data.get(C.GENRES_COL, "N/A")).replace('|', ', ')
+                year_val = movie_data.get(C.RELEASE_YEAR_COL)
+                year_display = int(year_val) if pd.notna(year_val) and year_val != 0 else "N/A"
 
+                with st.container(border=True):
+                    # Créez de nouvelles colonnes pour le poster et le reste des informations
+                    # Ratio: une petite colonne pour le poster, une plus grande pour le texte et la notation
+                    col_poster, col_info_and_rating = st.columns([0.15, 0.85])
+
+                    with col_poster:
+                        # --- Affichage du Poster ici ---
+                        poster_path_for_st_image = poster_map.get(movie_id)
+                        if poster_path_for_st_image and os.path.exists(poster_path_for_st_image):
+                            st.markdown(
+                                f"""
+                                <div style="width:100%;display:flex;justify-content:center;align-items:center;">
+                                    <img src="data:image/jpeg;base64,{base64.b64encode(open(poster_path_for_st_image, 'rb').read()).decode()}" style="width:100%;height:auto;object-fit:cover;border-radius:10px;"/>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                        else:
+                            st.markdown(
+                                """
+                                <div style="width:100%;display:flex;justify-content:center;align-items:center;">
+                                    <img src="https://via.placeholder.com/200x300?text=No+Poster" style="width:100%;height:auto;object-fit:cover;border-radius:10px;"/>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+
+                    with col_info_and_rating:
+                        # Déplacez les colonnes d'information et de notation à l'intérieur de cette nouvelle colonne
+                        cols_info, cols_rating_form = st.columns([0.6, 0.4]) # Ces colonnes restent comme avant
+
+                        with cols_info:
+                            st.subheader(f"{title}")
+                            st.caption(f"Genres: {genres_text_search} | Year: {year_display}")
+                            tmdb_id_val = movie_data.get(C.TMDB_ID_COL)
+                            # Place the "More details" link at the bottom of the card/info section
+                            more_details_html = ""
+                            if pd.notna(tmdb_id_val):
+                                try:
+                                    title_link = f"https://www.themoviedb.org/movie/{int(tmdb_id_val)}"
+                                    more_details_html = f"""
+                                        <div style='width: 100%; text-align: left; margin-top: 18px;'>
+                                            <a href='{title_link}' target='_blank' style='font-size:0.95em; color: #1a73e8; text-decoration: underline;'>More informations about the movie</a>
+                                        </div>
+                                    """
+                                except ValueError:
+                                    pass
+                                    
+                            st.markdown(more_details_html, unsafe_allow_html=True)
+                        with cols_rating_form: # Rating logic in search (unchanged)
+                            st.markdown("##### Rate this movie:")
+                            rating_key_sr = f"search_rating_{movie_id}_{re.sub(r'[^a-zA-Z0-9]', '', query)}"
+                            userid_key_sr = f"search_userid_{movie_id}_{re.sub(r'[^a-zA-Z0-9]', '', query)}"
+                            button_key_sr = f"search_save_{movie_id}_{re.sub(r'[^a-zA-Z0-9]', '', query)}"
+                            rating_opts_sr = [None, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]
+                            fmt_fn_sr = lambda x: "Rate" if x is None else f"{x} ★"
+                            selected_rating_sr = st.selectbox("Your rating:", options=rating_opts_sr, index=0, format_func=fmt_fn_sr, key=rating_key_sr, label_visibility="collapsed")
+                            user_id_for_rating_sr = None
+                            current_session_user_id_sr = st.session_state.get('current_user_id')
+                            is_user_identified = current_session_user_id_sr and current_session_user_id_sr != "new_user_temp" and \
+                                                 (st.session_state.active_page == "user_specific" or st.session_state.get('last_processed_radio_selection') == "Log In (Existing Profile)" or \
+                                                  (st.session_state.get('new_user_id_generated') is not None and st.session_state.new_user_id_generated == current_session_user_id_sr))
+                            if is_user_identified:
+                                st.caption(f"As User ID: {current_session_user_id_sr}")
+                                user_id_for_rating_sr = current_session_user_id_sr
+                            else:
+                                st.caption("Log in or create a profile to save ratings easily, or enter your User ID manually.")
+                                user_id_for_rating_input_val_sr = st.text_input("Your User ID (if known):", key=userid_key_sr, help="Enter your User ID (numeric) to save the rating.")
+                                if user_id_for_rating_input_val_sr: user_id_for_rating_sr = user_id_for_rating_input_val_sr.strip()
+                            if st.button("Save", key=button_key_sr, use_container_width=True):
+                                if selected_rating_sr is None: st.warning("Please select a rating.", icon="⚠️")
+                                elif not user_id_for_rating_sr: st.warning("Please provide a User ID or log in.", icon="⚠️")
+                                else:
+                                    try: # ... (saving code unchanged) ...
+                                        user_id_to_save_sr = int(user_id_for_rating_sr)
+                                        rating_to_save_single_sr = { C.USER_ID_COL: user_id_to_save_sr, C.ITEM_ID_COL: movie_id, C.RATING_COL: selected_rating_sr, C.TIMESTAMP_COL: int(time.time()) }
+                                        df_single_rating_sr = pd.DataFrame([rating_to_save_single_sr])
+                                        pending_ratings_filepath_sr = C.EVIDENCE_PATH / getattr(C, 'NEW_RATINGS_PENDING_FILENAME', 'new_ratings_pending.csv')
+                                        file_exists_sr = os.path.exists(pending_ratings_filepath_sr)
+                                        df_single_rating_sr.to_csv(pending_ratings_filepath_sr, mode='a', header=not file_exists_sr, index=False)
+                                        st.success(f"Rating ({selected_rating_sr}★) for '{title}' (User ID: {user_id_to_save_sr}) saved!")
+                                    except ValueError: st.error("User ID must be an integer.", icon="❌")
+                                    except Exception as e_save_sr: st.error(f"Saving error: {e_save_sr}", icon="❌")
+                st.markdown("---")
+else:
+    search_placeholder.empty()
+    valid_pages = ["general", "user_specific", "new_user_profiling", "new_user_instant_recs", "search_results"]
+    if st.session_state.active_page not in valid_pages:
+        st.session_state.active_page = "general"
+        st.session_state.search_input_value = ""
+        st.session_state.active_search_query = ""
+        st.rerun()
 # Add project footer both in the sidebar and at the bottom of the main page
 
 # Sidebar footer
