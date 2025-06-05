@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os
+st.set_page_config(page_title="Movie Recommendation", layout="wide")
+
 import re
 import random
 import time
@@ -30,7 +32,6 @@ N_INSTANT_RECOS_NEW_USER = 10
 CARDS_PER_ROW = 5
 model_path = 'mlsmm2156/data/small/recs/svdpp_global_model.p' # AJOUTÉ
 
-st.set_page_config(page_title="Movie Recommendation", layout="wide")
 
 
 # ------------------------------------------------------- Configuration de la page Streamlit -------------------------------------------------------

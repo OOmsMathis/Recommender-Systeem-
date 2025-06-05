@@ -9,6 +9,7 @@ import ast
 import requests
 import os
 import zipfile
+import streamlit as st
 
 
 def download_csvs_from_drive(file_urls, base_local_dir):
@@ -100,6 +101,7 @@ def reformat_movie_title_core(title_str_no_year):
 
 
 # --- Fonctions de Chargement ---
+@st.cache_data
 def load_ratings():
     ratings_filepath = C.EVIDENCE_PATH / C.RATINGS_FILENAME
     try:
@@ -115,6 +117,7 @@ def load_ratings():
         print(f"ERREUR (load_ratings): Erreur inattendue lors du chargement de {ratings_filepath}: {e}")
         raise
 
+@st.cache_data
 def load_items():
     movies_filepath = C.CONTENT_PATH / C.ITEMS_FILENAME
     tmdb_filepath = C.CONTENT_PATH / C.TMDB_FILENAME
@@ -320,6 +323,7 @@ def export_evaluation_report(df, model_name, accuracy=None, precision=None):
     df.to_csv(path, index=False)
     print(f"Evaluation report successfully exported to: {path}")
     
+@st.cache_data
 def load_posters_dict(posters_dir=None):
         """
         Charge les chemins des posters JPG dans un dictionnaire {movieId: chemin_image}.
