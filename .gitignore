@@ -133,7 +133,6 @@ dmypy.json
 
 # Images and data
 *.pdf
-images
 data
 *.zip
 posters
