@@ -51,7 +51,7 @@ def download_and_extract_zip(url, extract_to="mlsmm2156"):
 # Exécution prioritaire au lancement du script
 if not os.path.exists("mlsmm2156/data/small/content"):
     download_and_extract_zip(
-        "https://uclouvain-my.sharepoint.com/personal/mathis_ooms_student_uclouvain_be/_layouts/15/download.aspx?SourceUrl=%2Fpersonal%2Fmathis%5Fooms%5Fstudent%5Fuclouvain%5Fbe%2FDocuments%2FDocuments%2Fmlsmm2156%2Ezip"
+        "https://onedrive.live.com/personal/3814d4299f55d577/_layouts/15/download.aspx?SourceUrl=%2Fpersonal%2F3814d4299f55d577%2FDocuments%2Fmlsmm2156%2Ezip"
     )
 
 
