@@ -51,7 +51,7 @@ def download_and_extract_zip(url, extract_to="mlsmm2156"):
 # Exécution prioritaire au lancement du script
 if not os.path.exists("mlsmm2156/data/small/content"):
     download_and_extract_zip(
-        "https://www.dropbox.com/scl/fi/zr5184em7ajn0d3naqnof/mlsmm2156.zip?rlkey=eny294bo4s2dmih6msfnausbq&st=8fm7tmhg&dl=1"
+        r"https://uclouvain-my.sharepoint.com/personal/mathis_ooms_student_uclouvain_be/_layouts/15/download.aspx?SourceUrl=%2Fpersonal%2Fmathis%5Fooms%5Fstudent%5Fuclouvain%5Fbe%2FDocuments%2FDocuments%2Fmlsmm2156%2Ezip"
     )
 
 
