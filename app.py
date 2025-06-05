@@ -13,31 +13,6 @@ import constants as C_module
 C = C_module.Constant()
 import content
 
-def download_and_extract_zip(url, extract_to="mlsmm2156"):
-            zip_path = "data_temp.zip"
-
-            # Télécharger le ZIP
-            print("📥 Téléchargement du fichier ZIP...")
-            response = requests.get(url)
-            if response.status_code != 200:
-                raise Exception(f"Échec du téléchargement: {response.status_code}")
-
-            with open(zip_path, "wb") as f:
-                f.write(response.content)
-
-            # Décompresser le ZIP
-            print("📦 Décompression...")
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(extract_to)
-
-            # Supprimer le fichier ZIP après extraction
-            os.remove(zip_path)
-            print(f"✅ Données extraites dans: {extract_to}")
-
-# Appel prioritaire au lancement du main
-if not os.path.exists("mlsmm2156/data/small/content"):  # éviter de re-télécharger si déjà là
-        download_and_extract_zip("https://www.dropbox.com/scl/fi/zr5184em7ajn0d3naqnof/mlsmm2156.zip?rlkey=eny294bo4s2dmih6msfnausbq&st=8fm7tmhg&dl=1")
-
 import recommender
 import explanations
 from loaders import load_items, load_ratings, load_posters_dict

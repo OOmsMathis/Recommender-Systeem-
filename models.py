@@ -16,6 +16,9 @@ from surprise import SVDpp
 from sklearn.preprocessing import StandardScaler
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+import os 
+import requests
+import zipfile
 nltk.download('stopwords')
 nltk.download('wordnet')
 nltk.download('omw-1.4')
@@ -23,6 +26,34 @@ nltk.download('omw-1.4')
 import constants as C_module
 C = C_module.Constant()
 from loaders import load_ratings, load_items
+
+def download_and_extract_zip(url, extract_to="mlsmm2156"):
+    zip_path = "data_temp.zip"
+
+    # Télécharger le ZIP
+    print("📥 Téléchargement du fichier ZIP...")
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Échec du téléchargement: {response.status_code}")
+
+    with open(zip_path, "wb") as f:
+        f.write(response.content)
+
+    # Décompresser le ZIP
+    print("📦 Décompression...")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to)
+
+    # Supprimer le fichier ZIP après extraction
+    os.remove(zip_path)
+    print(f"✅ Données extraites dans: {extract_to}")
+
+# Exécution prioritaire au lancement du script
+if not os.path.exists("mlsmm2156/data/small/content"):
+    download_and_extract_zip(
+        "https://www.dropbox.com/scl/fi/zr5184em7ajn0d3naqnof/mlsmm2156.zip?rlkey=eny294bo4s2dmih6msfnausbq&st=8fm7tmhg&dl=1"
+    )
+
 
 print("models.py: Chargement des données globales...")
 try:
