@@ -6,6 +6,30 @@ from pathlib import Path
 import constants as C_module
 C = C_module.Constant() # Instancier la classe Constant
 import ast 
+import requests
+
+
+def download_csvs_from_drive(file_urls, base_local_dir):
+    """
+    Télécharge une série de fichiers CSV depuis des URLs (Google Drive ou autre)
+    et les stocke dans un répertoire local en respectant la structure de base_local_dir.
+    file_urls: dict {relative_path (str): url (str)}
+    base_local_dir: Path ou str, racine locale (ex: Path('mlsmm2156/data'))
+    """
+    base_local_dir = Path(base_local_dir)
+    for rel_path, url in file_urls.items():
+        local_path = base_local_dir / rel_path
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            with open(local_path, 'wb') as f:
+                f.write(response.content)
+            print(f"Téléchargé: {rel_path}")
+        except Exception as e:
+            print(f"Erreur lors du téléchargement de {url} -> {rel_path}: {e}")
+
+
 
 # --- Fonctions Helpers ---
 def parse_literal_eval_column(series):
