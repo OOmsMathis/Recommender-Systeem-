@@ -292,6 +292,27 @@ def export_evaluation_report(df, model_name, accuracy=None, precision=None):
         df["precision"] = precision
     df.to_csv(path, index=False)
     print(f"Evaluation report successfully exported to: {path}")
+    
+def load_posters_dict(posters_dir=None):
+        """
+        Charge les chemins des posters JPG dans un dictionnaire {movieId: chemin_image}.
+        Le nom du fichier doit commencer par l'id MovieLens (movieId), ex: '1234_some_title.jpg'.
+        Le répertoire par défaut est 'mlsmm2156/data/small/content/posters'.
+        """
+        if posters_dir is None:
+            posters_dir =  C.CONTENT_PATH / C.POSTERS_LOCAL_DIR
+        else:
+            posters_dir = Path(posters_dir)
+        posters_dict = {}
+        if not posters_dir.exists():
+            print(f"Le dossier des posters '{posters_dir}' n'existe pas.")
+            return posters_dict
+        for img_path in posters_dir.glob("*.jpg"):
+            match = re.match(r"^(\d+)", img_path.stem)
+            if match:
+                movie_id = int(match.group(1))
+                posters_dict[movie_id] = str(img_path.resolve())
+        return posters_dict
 
 
 
@@ -315,6 +336,18 @@ if __name__ == '__main__':
                 print(found_movies[[C.LABEL_COL, C.RELEASE_YEAR_COL]].head())
             else:
                 print(f"Pas de correspondance trouvée pour '{title_check}' dans les titres traités.")
+        print("\nChargement des posters...")
+        posters_dict = load_posters_dict()
+        print("Début du dictionnaire des posters (10 premiers éléments) :")
+        posters_items = list(posters_dict.items())
+        # Exemple d'utilisation de la méthode get sur le dictionnaire posters_dict
+        # On tente de récupérer le chemin du poster pour un movie_id donné (par exemple 1)
+        movie_id_test = 1
+        poster_path = posters_dict.get(movie_id_test)
+        if poster_path is not None:
+            print(f"Poster trouvé pour movie_id {movie_id_test}: {poster_path}")
+        else:
+            print(f"Aucun poster trouvé pour movie_id {movie_id_test}")
         
     except Exception as e_test:
         print(f"Erreur pendant le test de load_items: {e_test}")

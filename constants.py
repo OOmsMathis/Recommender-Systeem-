@@ -4,7 +4,7 @@ from pathlib import Path
 
 class Constant:
 
-    DATA_PATH = Path('data/small')  # -- fill here the dataset size to use
+    DATA_PATH = Path('mlsmm2156/data/small')  # -- fill here the dataset size to use
 
     # Content
     CONTENT_PATH = DATA_PATH / 'content'
@@ -60,3 +60,5 @@ class Constant:
 
     NEW_RATINGS_PENDING_FILENAME = 'new_ratings_pending.csv'
     USER_PROFILES_FILENAME = 'user_profiles.csv'
+
+    POSTERS_LOCAL_DIR = 'posters/posters'
