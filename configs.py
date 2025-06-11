@@ -5,7 +5,7 @@ from models import *
 
 class EvalConfig:  
   models = [
-    ("SVD_PLUS", ModelBaseline5, {
+    ("SVD_Classique", ModelBaseline4, {
       "n_factors": 125,
       "n_epochs": 40,
       "lr_all": 0.005,
