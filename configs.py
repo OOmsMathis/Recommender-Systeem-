@@ -5,11 +5,32 @@ from models import *
 
 class EvalConfig:  
   models = [
-    ("SVD_Classique", ModelBaseline4, {
+    ("SVD_Classique_20", ModelBaseline4, {
+      "n_factors": 125,
+      "n_epochs": 20,
+      "lr_all": 0.005,
+      "reg_all": 0.02 }),
+    ("SVD_Classique_40", ModelBaseline4, {
       "n_factors": 125,
       "n_epochs": 40,
       "lr_all": 0.005,
       "reg_all": 0.02 }),
+      ("SVD_Classique_60", ModelBaseline4, {
+      "n_factors": 125,
+      "n_epochs": 60,
+      "lr_all": 0.005,
+      "reg_all": 0.02 }),
+        ("SVD_Classique_80", ModelBaseline4, {
+      "n_factors": 125,
+      "n_epochs": 80,
+      "lr_all": 0.005,
+      "reg_all": 0.02 }),
+        ("SVD_Classique_100", ModelBaseline4, {
+      "n_factors": 125,
+      "n_epochs": 100,
+      "lr_all": 0.005,
+      "reg_all": 0.02 })
+
 
   ]
 
