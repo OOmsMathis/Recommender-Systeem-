@@ -104,9 +104,9 @@ print("\n--- SVD++ Global ---")
 
 # Paramètres pour le modèle SVD++ global (ajustez selon vos besoins)
 svdpp_global_params = {
-    'n_factors': 50,       # Nombre de facteurs latents
-    'n_epochs': 25,        # Nombre d'époques d'entraînement
-    'lr_all': 0.007,       # Taux d'apprentissage global
+    'n_factors': 125,       # Nombre de facteurs latents
+    'n_epochs': 40,        # Nombre d'époques d'entraînement
+    'lr_all': 0.005,       # Taux d'apprentissage global
     'reg_all': 0.02,       # Terme de régularisation global
     'random_state': 42,    # Pour la reproductibilité
     'verbose': False,       # Afficher les logs d'entraînement
